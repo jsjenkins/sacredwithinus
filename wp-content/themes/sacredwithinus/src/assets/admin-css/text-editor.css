@@ -1,0 +1,59 @@
+/* Body */
+body {
+	font-family: 'Helvetica Neue', Helvetica, Roboto, Arial, sans-serif;
+}
+p {
+	margin-top: 0;
+	margin-bottom: 20px;
+	font-family: 'Helvetica Neue', Helvetica, Roboto, Arial, sans-serif;
+	font-size: 16px;
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+	margin-top: 0;
+	margin-bottom: 20px;
+	font-family: 'Helvetica Neue', Helvetica, Roboto, Arial, sans-serif;
+	color: #000;
+}
+
+h1, .h1 {
+	font-size: 48px;
+}
+h2, .h2 { 
+	font-size: 40px;
+}
+h3, .h3 { 
+	font-size: 32px;
+}
+h4, .h4 { 
+	font-size: 24px;
+}
+h5, .h5 { 
+	font-size: 20px;
+}
+h6, .h6 { 
+	font-size: 18px;
+}
+
+/* Buttons */
+.button {
+	box-sizing: border-box;
+	display: inline-block;
+	border: none;
+	text-align: center;
+	text-decoration: none;
+	line-height: 1;
+	padding: 10px 20px;
+	font-size: 16px;
+	font-weight: bold;
+	color: #FFF;
+	background-color: #1779ba;
+	text-transform: uppercase;
+}
+.button[data-mce-selected]{
+	padding: 10px 20px !important;
+	margin: 0 !important;
+	border-radius: 0 !important;
+}
