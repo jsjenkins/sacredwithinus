@@ -2,9 +2,7 @@
 Contributors: 5starplugins
 Donate link: https://5starplugins.com/
 Tags: featured images in rss, rss images, featured image, thumbnails, images in rss, mailchimp, mailchimp rss, rss campaigns, infusionsoft, hubspot, constant contact, content marketing, marketing automation
-Requires at least: 2.9
-Tested up to: 5.7
-Requires PHP: 5.6
+Tested up to: 5.9.1
 Stable tag: trunk
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -188,6 +186,9 @@ Please submit a [rating and review](https://wordpress.org/support/plugin/feature
 6. Premium Options screenshot showing Media and Enclosure Tag options, and all the extra RSS features. Upgrade to support our development efforts.
 
 == Changelog ==
+= 1.5.9 =
+* Updated Freemius SDK with improvements and security fixes, bump WP compatibility to v5.9.1.
+
 = 1.5.8 =
 * Updated: Freemius SDK to v2.4.2, minor improvements and fixes
 * Updated: Bumped WordPress compatibility to v5.7
@@ -265,5 +266,5 @@ Please submit a [rating and review](https://wordpress.org/support/plugin/feature
 
 == Upgrade Notice ==
 
-= 1.5.8 =
-* Updated Freemius SDK with improvements and fixes, bump WP compatibility to v5.7, and added affiliate program link. Update today!
+= 1.5.9 =
+* Updated Freemius SDK with improvements and security fixes, bump WP compatibility to v5.9.1. Update today!
