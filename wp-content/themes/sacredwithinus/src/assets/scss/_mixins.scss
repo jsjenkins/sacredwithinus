@@ -110,12 +110,12 @@
 
 // Card padding
 @mixin card-padding( $value:1 ) {
-  padding: rem-calc(map-get($card-padding-vertical, 'small')*$value) rem-calc(map-get($card-padding-horizontal, 'small')*$value);
+  padding: rem-calc(15)*$value;
   @include breakpoint(medium) {
-    padding: rem-calc(map-get($card-padding-vertical, 'medium')*$value) rem-calc(map-get($card-padding-horizontal, 'medium')*$value);
+    padding: rem-calc(20)*$value
   }
   @include breakpoint(large) {
-    padding: rem-calc(map-get($card-padding-vertical, 'large')*$value) rem-calc(map-get($card-padding-horizontal, 'large')*$value);
+    padding: rem-calc(20)*$value
   }
 }
 
@@ -138,6 +138,9 @@
   color: $white;
   h1, h2, h3, h4, h5, h6,
   .h1, .h2, .h3, .h4, .h5, .h6 {
+    color: $white;
+  }
+  a {
     color: $white;
   }
 }

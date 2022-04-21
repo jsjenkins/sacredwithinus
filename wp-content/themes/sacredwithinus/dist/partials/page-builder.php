@@ -29,7 +29,14 @@
 					<div class="grid-container">
 						<div class="grid-x grid-padding-x align-center">
 							<div class="small-<?php echo $small_width; ?> medium-<?php echo $medium_width; ?> large-<?php echo $large_width; ?> cell">
-								<?php the_sub_field('copy'); ?>
+								<?php if( get_sub_field('image') ) { ?>
+									<div class="one-column-image">
+										<?php acf_image_tag( 'image', '100vw', 'large', TRUE ); ?>
+									</div>
+								<?php } ?>
+								<div class="white-bg-section">
+									<?php the_sub_field('copy'); ?>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -81,16 +88,24 @@
 							if($image) {
 								$image['medium'] = $image['sizes']['medium']; ?>
 								<img src="<?php echo $image['medium']; ?>" alt="<?php echo $image['alt']; ?>" />
-							<?php }
-							echo $col_1['copy']; ?>
+							<?php } ?>
+							<?php if( $col_1['copy']!='' ) { ?>
+								<div class="white-bg-section <?php if( $col_1_large<=4 ) { echo 'small'; } ?>">
+									<?php echo $col_1['copy']; ?>
+								</div>
+							<?php } ?>
 						</div>
 						<div class="small-<?php echo $col_2_small; ?> medium-<?php echo $col_2_medium; ?> large-<?php echo $col_2_large; ?> cell">
 							<?php $image = $col_2['image'];
 							if($image) {
 								$image['medium'] = $image['sizes']['medium']; ?>
 								<img src="<?php echo $image['medium']; ?>" alt="<?php echo $image['alt']; ?>" />
-							<?php }
-							echo $col_2['copy']; ?>
+							<?php } ?>
+							<?php if( $col_2['copy']!='' ) { ?>
+								<div class="white-bg-section <?php if( $col_2_large<=4 ) { echo 'small'; } ?>">
+									<?php echo $col_2['copy']; ?>
+								</div>
+							<?php } ?>
 						</div>
 					</div>
 				</div>
@@ -120,21 +135,14 @@
 							<?php while ( have_rows('blocks') ) : the_row(); ?>
 								<div class="cell">
 									<?php $image = get_sub_field('image');
-									if( $layout == 'images' && $image ) { ?>
+									if( $image ) { ?>
 										<div class="content-blocks-image">
 											<?php acf_image_tag( 'image', '(max-width: 640px) 100vw, 50vw', 'large', TRUE ); ?>
 										</div>
-									<?php } else if( $layout == 'images-circle' && $image ) { ?>
-										<div class="content-blocks-image circle">
-											<?php acf_image_tag( 'image', '(max-width: 1024px) 225px, 300px', 'small-square', TRUE ); ?>
-										</div>
-									<?php } else if( $layout == 'icons' && $image ) { 
-											$image = acf_image_single( 'image', 'thumbnail', TRUE ); ?>
-											<div class="content-blocks-image icon">
-												<img src="<?php echo $image; ?>" alt="" />
-											</div>
 									<?php } ?>
-									<?php the_sub_field('copy'); ?>
+									<div class="white-bg-section small">
+										<?php the_sub_field('copy'); ?>
+									</div>
 								</div>
 							<?php endwhile; ?>
 

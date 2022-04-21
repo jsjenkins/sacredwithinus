@@ -1,0 +1,116 @@
+.page-section.post-list {
+	@include vertical-padding(.5, true, false);
+	.post-card {
+		@include vertical-margin(.5, false, true);
+		@include card-padding();
+		text-decoration: none;
+		display: block;
+		background-color: $white;
+		background-image: url('../img/white-bg.jpg');
+		box-shadow: 0px 0px 10px #222;
+		color: $dark-blue;
+		.post-card-image {
+			position: relative;
+			overflow: hidden;
+			width: 100%;
+			padding-top: 65%;
+			margin-bottom: 15px;
+			img {
+				position: absolute;
+				max-width: none;
+				min-width: 1000%;
+				min-height: 1000%;
+				left: 50%;
+				top: 50%;
+				transform: translateX(-50%) translateY(-50%) scale(0.101);
+			}
+		}
+		.post-card-content {
+			@include clean-last-child;
+		}
+	}
+}
+
+.single-post {
+	background-color: $white;
+	background-image: url('../img/white-bg.jpg');
+	box-shadow: 0px 0px 10px #222;
+	.single-post-title {
+		padding-top: 10px;
+		text-align: center;
+		margin-bottom: 20px;
+	}
+	.single-post-date {
+		text-align: center;
+		border-top: $grey-c 1px solid;
+		color: $grey-9;
+		border-bottom: $grey-c 1px solid;
+		font-weight: $bold;
+		padding: 5px 0;
+	}
+	.single-post-image {
+		img {
+			width: 100%;
+		}
+	}
+	.single-post-content {
+		@include card-padding(2);
+		.single-post-tags {
+			margin-bottom: 20px;
+			@include breakpoint(medium) {
+				margin-bottom: rem-calc(25);
+			}
+			a {
+				display: inline-block;
+				text-decoration: none;
+				background-color: $light-blue;
+				color: $white;
+				padding: 7px 10px;
+				line-height: 1;
+				border-radius: 4px;
+				margin-right: 5px;
+				font-weight: $bold;
+				margin-bottom: 5px;
+				
+				i {
+					float:left;
+					margin-top: 2px;
+					font-size: rem-calc(14);
+					margin-right: 10px;
+				}
+			}
+		}
+	}
+}
+
+.sidebar {
+	@include vertical-margin(.5, true, false);
+	@include breakpoint(medium) {
+		display: flex;
+	}
+	.widget_search {
+		@include card-padding;
+		@include vertical-margin(.5, false, true);
+		background-color: $white;
+		background-image: url('../img/white-bg.jpg');
+		box-shadow: 0px 0px 10px #222;
+		@include breakpoint(medium) {
+			width: 50%;
+			margin-right: 17.5px;
+		}
+	}
+	.widget_text {
+		@include card-padding;
+		background-color: $white;
+		background-image: url('../img/white-bg.jpg');
+		box-shadow: 0px 0px 10px #222;
+		@include breakpoint(medium) {
+			width: 50%;
+			margin-left: 17.5px;
+		}
+	}
+}
+
+h1.category-title {
+	color: $white;
+}

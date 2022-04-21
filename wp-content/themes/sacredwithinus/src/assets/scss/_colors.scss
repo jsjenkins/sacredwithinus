@@ -2,12 +2,18 @@
 
 $light-gray: #e6e6e6;
 $medium-gray: #cacaca;
+$grey-c: #cacaca;
 $dark-gray: #8a8a8a;
+$grey-9: #929292;
 $black: #000000;
 $white: #ffffff;
 
+$dark-blue: #1f3c49;
+$blue: #215C6C;
+$light-blue: #508192;
+
 $foundation-palette: (
-	primary: #1779ba,
+	primary: $blue,
 	secondary: #767676,
 	success: #3adb76,
 	warning: #ffae00,

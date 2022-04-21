@@ -1,29 +1,32 @@
+div.off-canvas-content {
+	background-image: url('../img/bg-painting.jpg');
+	background-repeat: repeat-x;
+	background-position: center top;
+	background-color: #0B1D21;
+}
+
+div.white-bg-section {
+	@include card-padding(2);
+	@include clean-last-child;
+	background-color: $white;
+	background-image: url('../img/white-bg.jpg');
+	&.small {
+		@include card-padding(1);
+	}
+}
+
+.page-header-image {
+	img {
+		width: 100%;
+	}
+}
+
 // Page sections
 .page-section {
-	@include vertical-padding;
+	@include vertical-padding(.5);
 
-	// Transparent background
-	&.transparent-bg {
-		background-color: inherit;
-		&+& {
-			padding-top: 0;
-		}
-	}
-
-	// White background
-	&.white-bg {
-		background-color: $white;
-		&+& {
-			padding-top: 0;
-		}
-	}
-
-	// Light grey background
-	&.light-grey-bg {
-		background-color: $light-gray;
-		&+& {
-			padding-top: 0;
-		}
+	&+& {
+		padding-top: 0;
 	}
 
 	// Intro section
@@ -48,7 +51,9 @@
 		display: none;
 		text-align: center;
 		text-decoration: none;
-		border: 2px solid $primary-color;
+		font-weight: $bold;
+		border: 2px solid $white;
+		color: $white;
 		width: 32px;
 		height: 32px;
 		line-height: 28px;
@@ -67,7 +72,6 @@
 			display: inline-block;
 			width: auto;
 			padding: 0 10px;
-			background-color: $primary-color;
 			color: $white;
 			@include breakpoint(medium) {
 				position: absolute;
@@ -78,7 +82,6 @@
 			display: inline-block;
 			width: auto;
 			padding: 0 10px;
-			background-color: $primary-color;
 			color: $white;
 			@include breakpoint(medium) {
 				position: absolute;

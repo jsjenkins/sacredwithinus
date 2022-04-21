@@ -6,14 +6,17 @@ function custom_menu_order($menu_ord) {
     
     return array(
         'index.php', // Dashboard
+        'jetpack', // Jetpack
 
         'separator1', // First separator
         'edit.php', // Posts
+        'edit.php?post_type=painting', // Paintings
         'edit.php?post_type=page', // Pages
         'theme-settings', // Theme Settings
         
         'separator2', // Second separator
         'gf_edit_forms', // Forms
+        'feedback', // Feedback
         'upload.php', // Media
         'users.php', // Users
 
@@ -83,6 +86,12 @@ if( function_exists('acf_add_options_page') ) {
     acf_add_options_sub_page(array(
         'page_title'    => 'Social Media',
         'menu_title'    => 'Social Media',
+        'parent_slug'   => 'theme-settings',
+    ));
+
+    acf_add_options_sub_page(array(
+        'page_title'    => 'Footer',
+        'menu_title'    => 'Footer',
         'parent_slug'   => 'theme-settings',
     ));
 }

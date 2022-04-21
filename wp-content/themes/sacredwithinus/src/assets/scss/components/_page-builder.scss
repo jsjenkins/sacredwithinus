@@ -2,6 +2,11 @@
 .page-section.one-column {
 	.cell {
 		@include clean-last-child;
+		.one-column-image {
+			img {
+				width: 100%;
+			}
+		}
 	}
 }
 
@@ -15,9 +20,6 @@
 				@include breakpoint(medium) {
 					padding-bottom: 0;
 				}
-			}
-			img+* {
-				padding-top: 15px;
 			}
 		}
 		&.reverse-mobile {

@@ -46,10 +46,7 @@ function display_simple_navigation($nav_slug)
 function ls_boilerplate_register_menu()
 {
     register_nav_menus(array( 
-        'main-nav' => __('Main Navigation', 'html5blank'),
-        'mobile-nav' => __('Mobile Navigation', 'html5blank'),
-        'footer-nav' => __('Footer Navigation', 'html5blank'),
-        'policy-nav' => __('Policies Navigation', 'html5blank')
+        'primary' => __('Main Navigation', 'html5blank'),
     ));
 }
 

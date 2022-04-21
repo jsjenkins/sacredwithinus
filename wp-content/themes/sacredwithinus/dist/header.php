@@ -9,6 +9,8 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+		<link rel="stylesheet" href="https://i.icomoon.io/public/327b1321f9/SacredWithinUs/style.css">
+
 		<?php wp_head(); ?>
 
 		<?php the_field('gtm_head', 'options'); ?>
@@ -18,7 +20,20 @@
 
 		<div class="off-canvas position-right" id="offCanvas" data-off-canvas data-trap-focus="true">
 			<ul class="off-canvas-navigation">
-	        	<?php display_simple_navigation('mobile-nav'); ?>
+	        	<?php display_simple_navigation('primary'); ?>
+	        	<ul class="social">
+					<?php if( get_field('facebook_url', 'options') ) { ?>
+						<li><a href="<?php the_field('facebook_url', 'options'); ?>" target="_blank"><i class="icon-facebook"></i> <span class="visually-hidden">Facebook</span></a></li>
+					<?php } ?>
+
+					<?php if( get_field('twitter_url', 'options') ) { ?>
+						<li><a href="<?php the_field('twitter_url', 'options'); ?>" target="_blank"><i class="icon-twitter"></i> <span class="visually-hidden">Twitter</span></a></li>
+					<?php } ?>
+
+					<?php if( get_field('instagram_url', 'options') ) { ?>
+						<li><a href="<?php the_field('instagram_url', 'options'); ?>" target="_blank"><i class="icon-instagram"></i> <span class="visually-hidden">Instagram</span></a></li>
+					<?php } ?>																		
+				</ul>
 	        	<button class="close-off-canvas" aria-label="Close menu" type="button" data-close>
 			      Close Menu
 			    </button>
@@ -35,31 +50,51 @@
 						<?php the_field('alert_copy', 'options'); ?>
 					</div>
 				<?php } ?>
-				<div class="grid-container" id="main-navigation">
-					<div class="grid-x vertical-center">
-						<div class="cell auto">
-							<div class="logo">
-								<a href="<?php echo home_url(); ?>">
-									<?php $site_logo = get_field( 'site_logo', 'options');
-									if( $site_logo ) { ?>
-										<img src="<?php echo acf_image_single( 'site_logo', 'small', FALSE, 'options' ); ?>" alt="" class="logo-img" />
-									<?php } else { ?>
-										<img src="<?php echo get_image_directory(); ?>/logo.png" alt="" class="logo-img" />
+				<div class="top-bar">
+					<div class="grid-container" id="main-navigation">
+						<div class="grid-x grid-padding-x">
+							<div class="cell">
+								<nav class="main-nav">
+									<?php display_navigation('primary'); ?>
+								</nav>
+								<ul class="social">
+									<?php if( get_field('facebook_url', 'options') ) { ?>
+										<li><a href="<?php the_field('facebook_url', 'options'); ?>" target="_blank"><i class="icon-facebook"></i> <span class="visually-hidden">Facebook</span></a></li>
 									<?php } ?>
-								</a>
+
+									<?php if( get_field('twitter_url', 'options') ) { ?>
+										<li><a href="<?php the_field('twitter_url', 'options'); ?>" target="_blank"><i class="icon-twitter"></i> <span class="visually-hidden">Twitter</span></a></li>
+									<?php } ?>
+
+									<?php if( get_field('instagram_url', 'options') ) { ?>
+										<li><a href="<?php the_field('instagram_url', 'options'); ?>" target="_blank"><i class="icon-instagram"></i> <span class="visually-hidden">Instagram</span></a></li>
+									<?php } ?>																		
+								</ul>
+								<div class="mobile-nav-toggle">
+								<a href="#" class="off-canvas-toggle" data-toggle="offCanvas" aria-label="Mobile Navigation">
+										<div></div>
+										<div></div>
+										<div></div>
+									</a>
+								</div>
 							</div>
 						</div>
-						<div class="cell shrink">
-							<nav class="main-nav">
-								<?php display_navigation('main-nav'); ?>
-							</nav>
-							<div class="mobile-nav-toggle">
-								<a href="#" class="off-canvas-toggle" data-toggle="offCanvas" aria-label="Mobile Navigation">
-									<div></div>
-									<div></div>
-									<div></div>
-								</a>
-							</div>
+					</div>
+				</div>
+				<div class="grid-container">
+					<div class="grid-xgrid-padding-x">
+						<div class="cell">
+							<a href="<?php echo home_url(); ?>" class="logo">
+								<img src="<?php echo get_image_directory(); ?>/the-sacred-within-logo.png" alt="" class="logo-img" />
+								<ul class="tagline">
+									<li>Healing</li>
+									<li>Wholeness</li>
+									<li>Freedom</li>
+								</ul>
+								<div class="name">
+									by <span>Lisa B. Baker</span>
+								</div>
+							</a>
 						</div>
 					</div>
 				</div>

@@ -1,10 +1,48 @@
 footer.footer {
-	background-color: $light-gray;
+	@include white-text;
+	background-color: $dark-blue;
+	background-image: url('../img/blue-bg.jpg');
 	.footer-content {
-		@include vertical-padding(1);
+		@include vertical-padding(.5);
+		.footer-about {
+			@include vertical-padding(.5, false, true);
+			@include breakpoint(large) {
+				order: 2;
+				padding-bottom: 0;
+			}
+			.footer-about-image {
+				width: 110px;
+				float: left;
+				padding-right: 15px;
+				padding-bottom: 5px;
+				@include breakpoint(medium) {
+					width: 140px;
+					padding-right: 0;
+					padding-bottom: 0;
+				}
+			}
+			.footer-about-content {
+				@include clean-last-child;
+				@include breakpoint(medium) {
+					padding-left: 155px;
+				}
+			}
+		}
+		.footer-connect {
+			@include clean-last-child;
+			@include vertical-padding(.5, false, true);
+			@include breakpoint(medium) {
+				padding-bottom: 0;
+			}
+			form p {
+				margin-bottom: 0;
+			}
+		}
+		.footer-service {
+			@include clean-last-child;
+		}
 	}
 	.copyright {
-		background-color: $white;
 		font-size: rem-calc(14);
 		text-align: center;
 		padding: 10px 0;

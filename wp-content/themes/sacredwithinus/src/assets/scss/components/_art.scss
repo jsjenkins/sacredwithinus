@@ -1,0 +1,80 @@
+.page-section.art-list {
+	@include vertical-padding(.5, true, false);
+	.art-card {
+		@include vertical-margin(.5, false, true);
+		@include card-padding();
+		text-decoration: none;
+		display: block;
+		background-color: $white;
+		background-image: url('../img/white-bg.jpg');
+		box-shadow: 0px 0px 10px #222;
+		color: $dark-blue;
+		.art-card-image {
+			width: 100%;
+			margin-bottom: 15px;
+			text-align: center;
+			img {
+				max-height: 350px;
+			}
+		}
+		.art-card-content {
+			text-align: center;
+			@include clean-last-child;
+			.art-details {
+				margin-top: -15px;
+				.art-card-size {
+					font-style: italic;
+				}
+			}
+			.art-card-purchase {
+				.art-card-price {
+					font-size: rem-calc(28);
+					font-weight: bold;
+					margin-right: 15px;
+				}
+				.art-card-button {
+					color: $light-blue;
+					font-weight: bold;
+					text-decoration: underline;
+				}
+			}
+		}
+	}
+}
+
+.single-art {
+	background-color: $white;
+	background-image: url('../img/white-bg.jpg');
+	box-shadow: 0px 0px 10px #222;
+	.single-art-image {
+		img {
+			width: 100%;
+		}
+	}
+	.single-art-content {
+		@include card-padding(2);
+		.single-art-title {
+			text-align: center;
+		}
+		.single-art-details {
+			.single-art-size {
+				font-style: italic;
+			}
+		}
+		.single-art-price {
+			font-weight: bold;
+			font-size: rem-calc(38);
+			text-align: center;
+		}
+		.single-art-purchase {
+			@include vertical-margin(.5, true, false);
+			h3 {
+				text-align: center;
+			}
+		}
+	}
+}
+
+.single-art-details {
+	text-align: center;
+}

@@ -71,9 +71,13 @@ function ls_boilerplate_conditional_scripts()
 // Add stylesheets
 function ls_boilerplate_styles()
 {
+
+    // Typekit
+    wp_register_style('typekit', 'https://use.typekit.net/lhn6xcx.css', array(), '1.0.0');
+    wp_enqueue_style('typekit');
+
     // Custom CSS
     wp_register_style('theme-styles', get_template_directory_uri() . '/assets/css/app.css', array(), '1.0.0');
-    // Register CSS
     wp_enqueue_style('theme-styles');
 }
 
@@ -168,7 +172,7 @@ function ls_excerpt_index($length)
 function ls_boilerplate_article_more($more)
 {
     global $post;
-    return ' <a class="view-article" href="' . get_permalink($post->ID) . '">more...</a>';
+    return '...';
 }
 
 // Remove thumbnail width and height dimensions that prevent fluid images in the_thumbnail
