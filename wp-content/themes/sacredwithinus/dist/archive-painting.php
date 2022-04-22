@@ -1,4 +1,6 @@
-<?php get_header(); ?>
+<?php $current_page = get_page_by_path('art');
+
+get_header(); ?>
 
 <main role="main" aria-label="Content">
 	<div class="page-section art-list">
@@ -13,6 +15,7 @@
 			</div>
 		</div>
 	</div>
+	<?php get_template_part('partials/page', 'builder'); ?>
 </main>
 
 <?php get_footer(); ?>

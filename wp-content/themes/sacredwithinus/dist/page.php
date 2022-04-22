@@ -2,28 +2,26 @@
 
 <?php if (have_posts()): while (have_posts()) : the_post(); ?>
 	<main role="main" aria-label="Content">
-		<div class="white-content-container">
-			<?php if($post->post_content != '') { ?>
-				<div class="page-section">
-					<div class="grid-container">
-						<div class="grid-x grid-padding-x align-center">
-							<div class="large-10 cell">
-								<?php if( has_post_thumbnail() ) { ?>
-									<div class="page-header-image">
-										<?php thumbnail_image_tag( '100vw', 'large' ); ?>
-									</div>
-								<?php } ?>
-								<div class="white-bg-section">
-									<?php the_content(); ?>
+		<?php if($post->post_content != '') { ?>
+			<div class="page-section">
+				<div class="grid-container">
+					<div class="grid-x grid-padding-x align-center">
+						<div class="large-10 cell">
+							<?php if( has_post_thumbnail() ) { ?>
+								<div class="page-header-image">
+									<?php thumbnail_image_tag( '100vw', 'large' ); ?>
 								</div>
+							<?php } ?>
+							<div class="white-bg-section">
+								<?php the_content(); ?>
 							</div>
 						</div>
 					</div>
 				</div>
-			<?php } ?>
+			</div>
+		<?php } ?>
 
-			<?php get_template_part('partials/page', 'builder'); ?>
-		</div>
+		<?php get_template_part('partials/page', 'builder'); ?>
 	</main>
 
 <?php endwhile; ?>

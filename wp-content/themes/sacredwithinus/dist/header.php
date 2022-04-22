@@ -87,9 +87,15 @@
 							<a href="<?php echo home_url(); ?>" class="logo">
 								<img src="<?php echo get_image_directory(); ?>/the-sacred-within-logo.png" alt="" class="logo-img" />
 								<ul class="tagline">
-									<li>Healing</li>
-									<li>Wholeness</li>
-									<li>Freedom</li>
+									<?php if( get_field('logo_word_1', 'options') ) { ?>
+										<li><?php the_field('logo_word_1', 'options'); ?></li>
+									<?php } ?>
+									<?php if( get_field('logo_word_2', 'options') ) { ?>
+										<li><?php the_field('logo_word_2', 'options'); ?></li>
+									<?php } ?>
+									<?php if( get_field('logo_word_3', 'options') ) { ?>
+										<li><?php the_field('logo_word_3', 'options'); ?></li>
+									<?php } ?>
 								</ul>
 								<div class="name">
 									by <span>Lisa B. Baker</span>

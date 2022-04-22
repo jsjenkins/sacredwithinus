@@ -3,28 +3,61 @@
     "title": "General Info",
     "fields": [
         {
-            "key": "field_5e3900237298e",
-            "label": "Site Logo",
-            "name": "site_logo",
-            "type": "image",
+            "key": "field_6261916f66170",
+            "label": "Logo Word 1",
+            "name": "logo_word_1",
+            "type": "text",
             "instructions": "",
             "required": 0,
             "conditional_logic": 0,
             "wrapper": {
-                "width": "50",
+                "width": "33",
                 "class": "",
                 "id": ""
             },
-            "return_format": "array",
-            "preview_size": "medium",
-            "library": "all",
-            "min_width": "",
-            "min_height": "",
-            "min_size": "",
-            "max_width": "",
-            "max_height": "",
-            "max_size": "",
-            "mime_types": ""
+            "default_value": "",
+            "placeholder": "",
+            "prepend": "",
+            "append": "",
+            "maxlength": ""
+        },
+        {
+            "key": "field_6261918c66171",
+            "label": "Logo Word 2",
+            "name": "logo_word_2",
+            "type": "text",
+            "instructions": "",
+            "required": 0,
+            "conditional_logic": 0,
+            "wrapper": {
+                "width": "33",
+                "class": "",
+                "id": ""
+            },
+            "default_value": "",
+            "placeholder": "",
+            "prepend": "",
+            "append": "",
+            "maxlength": ""
+        },
+        {
+            "key": "field_6261919066172",
+            "label": "Logo Word 3",
+            "name": "logo_word_3",
+            "type": "text",
+            "instructions": "",
+            "required": 0,
+            "conditional_logic": 0,
+            "wrapper": {
+                "width": "33",
+                "class": "",
+                "id": ""
+            },
+            "default_value": "",
+            "placeholder": "",
+            "prepend": "",
+            "append": "",
+            "maxlength": ""
         },
         {
             "key": "field_5e39003a7298f",
@@ -35,7 +68,7 @@
             "required": 0,
             "conditional_logic": 0,
             "wrapper": {
-                "width": "50",
+                "width": "100",
                 "class": "",
                 "id": ""
             },
@@ -100,5 +133,6 @@
     "hide_on_screen": "",
     "active": true,
     "description": "",
-    "modified": 1599669697
+    "show_in_rest": 0,
+    "modified": 1650561429
 }

@@ -14,7 +14,9 @@
 
 				<?php ls_boilerplate_excerpt('ls_excerpt_index'); ?>
 
-				<div class="button">Read More</div>
+				<div class="post-card-button">
+					<div class="button dark">Read More</div>
+				</div>
 			</div>
 
 		</a>

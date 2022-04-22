@@ -27,6 +27,9 @@
 		}
 		.post-card-content {
 			@include clean-last-child;
+			.post-card-button {
+				text-align: center;
+			}
 		}
 	}
 }
