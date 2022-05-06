@@ -77,7 +77,7 @@ function ls_boilerplate_styles()
     wp_enqueue_style('typekit');
 
     // Custom CSS
-    wp_register_style('theme-styles', get_template_directory_uri() . '/assets/css/app.css', array(), '1.0.1');
+    wp_register_style('theme-styles', get_template_directory_uri() . '/assets/css/app.css', array(), '1.0.2');
     wp_enqueue_style('theme-styles');
 }
 
