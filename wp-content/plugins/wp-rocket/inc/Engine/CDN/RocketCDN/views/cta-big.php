@@ -15,6 +15,8 @@
  */
 
 defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
+
+$data = isset( $data ) && is_array( $data ) ? $data : []; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 ?>
 <div class="wpr-rocketcdn-cta <?php echo esc_attr( $data['container_class'] ); ?>" id="wpr-rocketcdn-cta">
 	<?php if ( ! empty( $data['promotion_campaign'] ) ) : ?>
@@ -39,7 +41,7 @@ defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
 				<li class="wpr-rocketcdn-feature wpr-rocketcdn-bandwidth">
 					<?php
 					// translators: %1$s = opening strong tag, %2$s = closing strong tag.
-					printf( esc_html__( 'High performance Content Delivery Network (CDN) with %1$sunlimited bandwith%2$s', 'rocket' ), '<strong>', '</strong>' );
+					printf( esc_html__( 'High performance Content Delivery Network (CDN) with %1$sunlimited bandwidth%2$s', 'rocket' ), '<strong>', '</strong>' );
 					?>
 				</li>
 				<li class="wpr-rocketcdn-feature wpr-rocketcdn-configuration">
@@ -62,9 +64,9 @@ defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
 						<?php
 						printf(
 						// translators: %1$s = discounted price, %2$s = regular price.
-								esc_html__( '*$%1$s/month for 12 months then $%2$s/month. You can cancel your subscription at any time.', 'rocket' ),
-								esc_html( str_replace( '*', '', $data['current_price'] ) ),
-								esc_html( $data['regular_price'] )
+							esc_html__( '*$%1$s/month for 12 months then $%2$s/month. You can cancel your subscription at any time.', 'rocket' ),
+							esc_html( str_replace( '*', '', $data['current_price'] ) ),
+							esc_html( $data['regular_price'] )
 						);
 						?>
 					</li>
@@ -72,7 +74,7 @@ defined( 'ABSPATH' ) || die( 'Cheatin&#8217; uh?' );
 			</ul>
 			<div class="wpr-rocketcdn-pricing">
 				<?php if ( ! empty( $data['error'] ) ) : ?>
-				<p><?php echo esc_html( $data['message'] ); ?></p>
+				<p><?php echo $data['message']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
 				<?php else : ?>
 					<?php if ( ! empty( $data['regular_price'] ) ) : ?>
 					<h4 class="wpr-title2 wpr-rocketcdn-pricing-regular"><del>$<?php echo esc_html( $data['regular_price'] ); ?></del></h4>

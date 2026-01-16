@@ -1,21 +1,16 @@
 <?php
+declare(strict_types=1);
+
 namespace WP_Rocket\Engine\Optimization\DeferJS;
 
 use WP_Rocket\Dependencies\League\Container\ServiceProvider\AbstractServiceProvider;
 
 /**
  * Service provider for the WP Rocket Defer JS
- *
- * @since 3.8
  */
 class ServiceProvider extends AbstractServiceProvider {
-
 	/**
-	 * The provides array is a way to let the container
-	 * know that a service is provided by this service
-	 * provider. Every service that is registered via
-	 * this service provider must have an alias added
-	 * to this array or it will be ignored.
+	 * Array of services provided by this service provider
 	 *
 	 * @var array
 	 */
@@ -26,18 +21,32 @@ class ServiceProvider extends AbstractServiceProvider {
 	];
 
 	/**
+	 * Check if the service provider provides a specific service.
+	 *
+	 * @param string $id The id of the service.
+	 *
+	 * @return bool
+	 */
+	public function provides( string $id ): bool {
+		return in_array( $id, $this->provides, true );
+	}
+
+	/**
 	 * Registers items with the container
 	 *
 	 * @return void
 	 */
-	public function register() {
-		$this->getContainer()->add( 'defer_js', 'WP_Rocket\Engine\Optimization\DeferJS\DeferJS' )
-			->addArgument( $this->getContainer()->get( 'options' ) );
-		$this->getContainer()->share( 'defer_js_admin_subscriber', 'WP_Rocket\Engine\Optimization\DeferJS\AdminSubscriber' )
-			->addArgument( $this->getContainer()->get( 'defer_js' ) )
-			->addTag( 'admin_subscriber' );
-		$this->getContainer()->share( 'defer_js_subscriber', 'WP_Rocket\Engine\Optimization\DeferJS\Subscriber' )
-			->addArgument( $this->getContainer()->get( 'defer_js' ) )
-			->addTag( 'front_subscriber' );
+	public function register(): void {
+		$this->getContainer()->add( 'defer_js', DeferJS::class )
+			->addArguments(
+				[
+					'options',
+					'dynamic_lists_defaultlists_data_manager',
+				]
+			);
+		$this->getContainer()->addShared( 'defer_js_admin_subscriber', AdminSubscriber::class )
+			->addArgument( 'defer_js' );
+		$this->getContainer()->addShared( 'defer_js_subscriber', Subscriber::class )
+			->addArgument( 'defer_js' );
 	}
 }

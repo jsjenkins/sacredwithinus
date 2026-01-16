@@ -6,6 +6,8 @@
  */
 
 defined( 'ABSPATH' ) || exit;
+
+$data = isset( $data ) ? $data : []; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 ?>
 <div class="rocket-promo-banner" id="rocket-promo-banner">
 	<div>
@@ -33,5 +35,5 @@ defined( 'ABSPATH' ) || exit;
 		</ul>
 		<button class="rocket-promo-cta wpr-popin-upgrade-toggle"><?php esc_html_e( 'Upgrade now', 'rocket' ); ?></button>
 	</div>
-	<button class="wpr-notice-close wpr-icon-close" id="rocket-dismiss-promotion"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice.', 'rocket' ); ?></span></button>
+	<button class="wpr-notice-close wpr-icon-close" id="rocket-dismiss-promotion"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice', 'rocket' ); ?></span></button>
 </div>

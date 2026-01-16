@@ -7,12 +7,17 @@
 
 namespace Automattic\Jetpack\Search;
 
+use Automattic\Jetpack\Connection\Manager as Connection_Manager;
+use Automattic\Jetpack\Modules;
 use Automattic\Jetpack\Status;
-use Jetpack_Options;
 use WP_Error;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit( 0 );
+}
+
 /**
- * To get and set Searh module settings
+ * To get and set Search module settings
  */
 class Module_Control {
 	/**
@@ -23,19 +28,39 @@ class Module_Control {
 	protected $plan;
 
 	/**
+	 * Connection_Manager object
+	 *
+	 * @var \Automattic\Jetpack\Connection\Manager
+	 */
+	protected $connection_manager;
+
+	/**
 	 * We use the same options as Jetpack the plugin to flag whether Search is active.
 	 */
-	const JETPACK_ACTIVE_MODULES_OPTION_KEY       = 'active_modules';
-	const JETPACK_SEARCH_MODULE_SLUG              = 'search';
-	const SEARCH_MODULE_INSTANT_SEARCH_OPTION_KEY = 'instant_search_enabled';
+	const JETPACK_ACTIVE_MODULES_OPTION_KEY               = 'active_modules';
+	const JETPACK_SEARCH_MODULE_SLUG                      = 'search';
+	const SEARCH_MODULE_INSTANT_SEARCH_OPTION_KEY         = 'instant_search_enabled';
+	const SEARCH_MODULE_SWAP_CLASSIC_TO_INLINE_OPTION_KEY = 'swap_classic_to_inline_search';
 
 	/**
 	 * Contructor
 	 *
-	 * @param Plan|null $plan - Plan object.
+	 * @param Plan|null                                   $plan - Plan object.
+	 * @param \Automattic\Jetpack\Connection\Manager|null $connection_manager - Connection_Manager object.
 	 */
-	public function __construct( $plan = null ) {
-		$this->plan = $plan === null ? new Plan() : $plan;
+	public function __construct( $plan = null, $connection_manager = null ) {
+		$this->plan               = $plan === null ? new Plan() : $plan;
+		$this->connection_manager = $connection_manager === null ? new Connection_Manager( Package::SLUG ) : $connection_manager;
+		if ( ! did_action( 'jetpack_search_module_control_initialized' ) ) {
+			add_filter( 'jetpack_get_available_standalone_modules', array( $this, 'search_filter_available_modules' ), 10, 1 );
+			if ( Helper::is_wpcom() ) {
+				add_filter( 'jetpack_active_modules', array( $this, 'search_filter_available_modules' ), 10, 2 );
+			}
+			/**
+			 * Fires when the Automattic\Jetpack\Search\Module_Control is initialized for the first time.
+			 */
+			do_action( 'jetpack_search_module_control_initialized' );
+		}
 	}
 
 	/**
@@ -44,7 +69,7 @@ class Module_Control {
 	 * @return bool
 	 */
 	public function is_active() {
-		return in_array( self::JETPACK_SEARCH_MODULE_SLUG, $this->get_active_modules(), true );
+		return ( new Modules() )->is_active( self::JETPACK_SEARCH_MODULE_SLUG );
 	}
 
 	/**
@@ -53,62 +78,37 @@ class Module_Control {
 	 * @return bool
 	 */
 	public function is_instant_search_enabled() {
-		return (bool) get_option( self::SEARCH_MODULE_INSTANT_SEARCH_OPTION_KEY );
+		return (bool) $this->plan->supports_instant_search() && get_option( self::SEARCH_MODULE_INSTANT_SEARCH_OPTION_KEY );
+	}
+
+	/**
+	 * Returns a boolean for whether new inline search is enabled.
+	 *
+	 * @return bool
+	 */
+	public function is_swap_classic_to_inline_search() {
+		return (bool) get_option( self::SEARCH_MODULE_SWAP_CLASSIC_TO_INLINE_OPTION_KEY, false );
 	}
 
 	/**
 	 * Activiate Search module
 	 */
 	public function activate() {
-		/**
-		 * Fires before a module is activated.
-		 *
-		 * @since 2.6.0
-		 *
-		 * @param string $module Module slug.
-		 * @param bool $exit Should we exit after the module has been activated. Default to true.
-		 * @param bool $redirect Should the user be redirected after module activation? Default to true.
-		 */
-		do_action( 'jetpack_pre_activate_module', self::JETPACK_SEARCH_MODULE_SLUG );
-
-		// If it's already active, then don't do it again.
-		if ( $this->is_active() ) {
-			return true;
+		$is_wpcom = defined( 'IS_WPCOM' ) && IS_WPCOM;
+		if ( ( new Status() )->is_offline_mode() ) {
+			return new WP_Error( 'site_offline', __( 'Jetpack Search cannot be used in offline mode.', 'jetpack-search-pkg' ) );
 		}
-		// Not available for offline mode.
-		$is_offline_mode = ( new Status() )->is_offline_mode();
-		if ( $is_offline_mode ) {
-			return new WP_Error( 'offline_mode', __( 'Search module can not be activated in offline mode.', 'jetpack-search-pkg' ) );
+		if ( ! $is_wpcom && ! $this->connection_manager->is_connected() ) {
+			return new WP_Error( 'connection_required', __( 'Connect your site to use Jetpack Search.', 'jetpack-search-pkg' ) );
 		}
-		// Return false if no plan supports search.
 		if ( ! $this->plan->supports_search() ) {
 			return new WP_Error( 'not_supported', __( 'Your plan does not support Jetpack Search.', 'jetpack-search-pkg' ) );
 		}
 
-		$active_modules   = $this->get_active_modules();
-		$active_modules[] = self::JETPACK_SEARCH_MODULE_SLUG;
-
-		$success = Jetpack_Options::update_option( self::JETPACK_ACTIVE_MODULES_OPTION_KEY, $active_modules );
-
-		/**
-		 * Fired after a module has been deactivated.
-		 *
-		 * @since 4.2.0
-		 *
-		 * @param string $module Module slug.
-		 * @param boolean $success whether the module was deactivated.
-		 */
-		do_action( 'jetpack_activate_module', self::JETPACK_SEARCH_MODULE_SLUG, $success );
-		/**
-		 * Fires when a module is deactivated.
-		 * The dynamic part of the filter, $module, is the module slug.
-		 *
-		 * @since 1.9.0
-		 *
-		 * @param string $module Module slug.
-		 */
-		do_action( 'jetpack_activate_module_' . self::JETPACK_SEARCH_MODULE_SLUG );
-
+		$success = ( new Modules() )->activate( self::JETPACK_SEARCH_MODULE_SLUG, false, false );
+		if ( false === $success ) {
+			return new WP_Error( 'not_updated', __( 'Setting not updated.', 'jetpack-search-pkg' ) );
+		}
 		return $success;
 	}
 
@@ -116,24 +116,7 @@ class Module_Control {
 	 * Deactiviate Search module
 	 */
 	public function deactivate() {
-		/**
-		 * This action is already documented in class.jetpack-admin.php
-		 */
-		do_action( 'jetpack_pre_deactivate_module', self::JETPACK_SEARCH_MODULE_SLUG, false );
-
-		$active_modules = $this->get_active_modules();
-		$active_modules = array_values( array_diff( $active_modules, array( self::JETPACK_SEARCH_MODULE_SLUG ) ) );
-
-		$success = Jetpack_Options::update_option( self::JETPACK_ACTIVE_MODULES_OPTION_KEY, $active_modules );
-
-		/**
-		 * This action is already documented in class.jetpack-admin.php
-		 */
-		do_action( 'jetpack_deactivate_module', self::JETPACK_SEARCH_MODULE_SLUG, $success );
-		/**
-		 * This action is already documented in class.jetpack-admin.php
-		 */
-		do_action( 'jetpack_deactivate_module_' . self::JETPACK_SEARCH_MODULE_SLUG );
+		$success = ( new Modules() )->deactivate( self::JETPACK_SEARCH_MODULE_SLUG );
 
 		$this->disable_instant_search();
 
@@ -179,28 +162,37 @@ class Module_Control {
 	}
 
 	/**
-	 * Get a list of activated modules as an array of module slugs.
+	 * Update setting indicating whether inline search should use newer 1.3 API.
+	 *
+	 * @param bool $swap_classic_to_inline_search - true to use Inline Search, false to use Classic Search.
 	 */
-	public function get_active_modules() {
-		$active_modules = Jetpack_Options::get_option( self::JETPACK_ACTIVE_MODULES_OPTION_KEY );
-
-		if ( ! is_array( $active_modules ) ) {
-			$active_modules = array();
-		}
-
-		/**
-		 * Allow filtering of the active modules.
-		 *
-		 * Gives theme and plugin developers the power to alter the modules that
-		 * are activated on the fly.
-		 *
-		 * @since 5.8.0
-		 *
-		 * @param array $active Array of active module slugs.
-		 */
-		$active_modules = apply_filters( 'jetpack_active_modules', $active_modules );
-
-		return array_unique( $active_modules );
+	public function update_swap_classic_to_inline_search( bool $swap_classic_to_inline_search ) {
+		return update_option( self::SEARCH_MODULE_SWAP_CLASSIC_TO_INLINE_OPTION_KEY, $swap_classic_to_inline_search );
 	}
 
+	/**
+	 * Get a list of activated modules as an array of module slugs.
+	 *
+	 * @deprecated 0.12.3
+	 * @return Array $active_modules
+	 */
+	public function get_active_modules() {
+		_deprecated_function(
+			__METHOD__,
+			'jetpack-search-0.12.3',
+			'Automattic\\Jetpack\\Modules\\get_active'
+		);
+
+		return ( new Modules() )->get_active();
+	}
+
+	/**
+	 * Adds search to the list of available modules
+	 *
+	 * @param array $modules The available modules.
+	 * @return array
+	 */
+	public function search_filter_available_modules( $modules ) {
+		return array_merge( array( self::JETPACK_SEARCH_MODULE_SLUG ), $modules );
+	}
 }

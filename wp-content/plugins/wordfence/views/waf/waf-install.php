@@ -17,7 +17,7 @@ if (!defined('WORDFENCE_VERSION')) { exit; }
 		<div class="wf-modal-content">
 			<?php
 			$currentAutoPrependFile = ini_get('auto_prepend_file');
-			if (empty($currentAutoPrependFile) || WF_IS_WP_ENGINE || WF_IS_PRESSABLE):
+			if (empty($currentAutoPrependFile) || WF_IS_WP_ENGINE || WF_IS_PRESSABLE || WF_IS_FLYWHEEL):
 			?>
 			<p><?php echo wp_kses(__('To make your site as secure as possible, the Wordfence Web Application Firewall is designed to run via a PHP setting called <code>auto_prepend_file</code>, which ensures it runs before any potentially vulnerable code runs.', 'wordfence'), array('code'=>array())); ?></p>
 			<?php else: ?>
@@ -35,7 +35,8 @@ if (!defined('WORDFENCE_VERSION')) { exit; }
 				array("apache-suphp", __('Apache + suPHP', 'wordfence'), $serverInfo->isApacheSuPHP(), wfWAFAutoPrependHelper::helper('apache-suphp')->getFilesNeededForBackup()),
 				array("cgi", __('Apache + CGI/FastCGI', 'wordfence'), $serverInfo->isApache() && !$serverInfo->isApacheSuPHP() && ($serverInfo->isCGI() || $serverInfo->isFastCGI()), wfWAFAutoPrependHelper::helper('cgi')->getFilesNeededForBackup()),
 				array("litespeed", __('LiteSpeed/lsapi', 'wordfence'), $serverInfo->isLiteSpeed(), wfWAFAutoPrependHelper::helper('litespeed')->getFilesNeededForBackup()),
-				array("nginx", __('NGINX', 'wordfence'), $serverInfo->isNGINX(), wfWAFAutoPrependHelper::helper('nginx')->getFilesNeededForBackup()),
+				array("nginx-unit", __('NGINX Unit', 'wordfence'), $serverInfo->isNginxUnit(), wfWAFAutoPrependHelper::helper('nginx')->getFilesNeededForBackup()),
+				array("nginx", __('NGINX', 'wordfence'), $serverInfo->isNginxStandard(), wfWAFAutoPrependHelper::helper('nginx')->getFilesNeededForBackup()),
 				array("iis", __('Windows (IIS)', 'wordfence'), $serverInfo->isIIS(), wfWAFAutoPrependHelper::helper('iis')->getFilesNeededForBackup()),
 				array("manual", __('Manual Configuration', 'wordfence'), false, array()),
 			);
@@ -64,6 +65,7 @@ if (!defined('WORDFENCE_VERSION')) { exit; }
 			<div class="wf-manual-waf-config" style="display: none;">
 				<p><?php esc_html_e('If you are using a web server not listed in the dropdown or if file permissions prevent the installer from completing successfully, you will need to perform the change manually. Click Continue below to create the required file and view manual installation instructions.', 'wordfence'); ?></p>
 			</div>
+			<div class="wf-notice wf-nginx-unit-waf-config wf-waf-install-blocked" style="display: none;"><?php esc_html_e("Firewall optimization is not currently supported on NGINX Unit", "wordfence"); ?></div>
 			<?php
 			$adminURL = network_admin_url('admin.php?page=WordfenceWAF&subpage=waf_options&action=configureAutoPrepend');
 			$wfnonce = wp_create_nonce('wfWAFAutoPrepend');

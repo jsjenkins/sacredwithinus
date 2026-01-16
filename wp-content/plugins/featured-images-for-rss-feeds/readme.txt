@@ -1,17 +1,19 @@
 === Featured Images in RSS for Mailchimp & More ===
 Contributors: 5starplugins
 Donate link: https://5starplugins.com/
-Tags: featured images in rss, rss images, featured image, thumbnails, images in rss, mailchimp, mailchimp rss, rss campaigns, infusionsoft, hubspot, constant contact, content marketing, marketing automation
-Tested up to: 5.9.1
-Stable tag: trunk
+Tags: featured images in rss, rss images, mailchimp, rss campaigns, content marketing
+Requires at least: 2.9
+Tested up to: 6.8
+Requires PHP: 5.6
+Stable tag: 1.7.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Send images to RSS instantly for free. Output blog or WooCommerce photos to Mailchimp RSS email campaigns, ActiveCampaign, Infusionsoft, Hubspot, Bloglovin’, Feedly and more. 
+Send images to RSS instantly for free. Output blog or WooCommerce photos to Mailchimp RSS email campaigns, ActiveCampaign, Hubspot, Feedly and more.
 
 == Description ==
 
-Get images in your RSS feed instantly for free. Output blog featured images to Mailchimp RSS email campaigns, ActiveCampaign, Infusionsoft, Hubspot, Zoho, Feedburner, Bloglovin’, Feedly, and other services that use RSS feed data. Also works with WooCommerce product images for product-based RSS campaigns! A trusted plugin, developed in California with over 30,000 active installs and 68+ five star reviews. We actively answer every support forum thread.
+Get images in your RSS feed instantly for free. Output blog featured images to Mailchimp RSS email campaigns, ActiveCampaign, Infusionsoft, Hubspot, Zoho, Feedburner, Bloglovin’, Feedly, and other services that use RSS feed data. Also works with WooCommerce product images for product-based RSS campaigns! A trusted plugin, developed in California with over 30,000 active installs and 75+ five star reviews. We actively answer every support forum thread.
 
 Featured Images In RSS was built for content marketers. Easy set-up with minimal configuration to get up and running in minutes.
 
@@ -99,7 +101,7 @@ RewriteRule .*\.(jpg|jpeg|gif|png|bmp)$ - [F,NC]
 = Images ARE showing in RSS but not showing in Mailchimp =
 First, make sure the RSS feed URL set-up in Mailchimp is correct and validated. Validate your feed is working here [https://validator.w3.org/feed/](https://validator.w3.org/feed/)
 
-Please see our [Mailchimp specific help](https://support.5starplugins.com/article/23-i-can-t-view-images-in-my-newsletter) if all of the above is correct and you still can’t view the images in your Mailchimp email. 
+Please see our [Mailchimp specific help](https://support.5starplugins.com/article/23-i-can-t-view-images-in-my-newsletter) if all of the above is correct and you still can’t view the images in your Mailchimp email.
 
 = Images ARE showing in RSS but not showing in Hubspot =
 First, make sure the RSS feed URL set-up in Hubspot is correct and validated. Validate your feed is working here [https://validator.w3.org/feed/](https://validator.w3.org/feed/)
@@ -109,7 +111,7 @@ If images are showing up in your feed data, then it may be a Hubspot specific se
 How-to set-up an RSS to email in Hubspot:
 [https://knowledge.hubspot.com/blog-user-guide-v2/how-to-set-up-an-rss-to-email-blog-subscription-for-an-external-blog](https://knowledge.hubspot.com/blog-user-guide-v2/how-to-set-up-an-rss-to-email-blog-subscription-for-an-external-blog)
 
-Hubspot RSS module product update: 
+Hubspot RSS module product update:
 [http://designers.hubspot.com/blog/product-update-new-rss-module-images](http://designers.hubspot.com/blog/product-update-new-rss-module-images)
 
 Hubspot RSS email styling:
@@ -118,7 +120,7 @@ Hubspot RSS email styling:
 If it's still not working, it’s best to contact Hubspot support to see if they can help with how to link up the image in the RSS description field, or the image in the Media tag, to the RSS item URL.
 
 = Double images showing =
-You might have both the featured image set, as well as a body image inserted. Delete the body image to have one image show up. If your theme doesn’t show the featured image, and you’re adding a body image so it shows, then either change themes or customize the theme so it displays the featured image – it can be easy or hard, depending on how the theme is coded and styled. 
+You might have both the featured image set, as well as a body image inserted. Delete the body image to have one image show up. If your theme doesn’t show the featured image, and you’re adding a body image so it shows, then either change themes or customize the theme so it displays the featured image – it can be easy or hard, depending on how the theme is coded and styled.
 
 This issue can occur in some services when using advanced design features. Our Premium version fix duplicate images issues with an option to use Media tag images only. It can fix duplicate images issues when using image tags for advanced template designs.
 
@@ -138,7 +140,7 @@ The other option is to use some custom CSS to display the image(s) smaller in th
 
 = Free Features =
 * Featured image size: Select from thumbnail, medium, large, any theme-specific sizes, and full size.
-* Image Position: Select Image left above text, Image left text wrap, Image right text wrap, and Image centered above text.  
+* Image Position: Select Image left above text, Image left text wrap, Image right text wrap, and Image centered above text.
 * Padding: Instantly set the spacing between the image and the body text.
 * Feedly: Now support Feedly's webfeedsFeaturedVisual class name on image HTML.
 
@@ -170,22 +172,60 @@ Enjoy a 14-day free trial no credit card required. Check out this full suite of 
 We promise you'll love the features this plugin provides for your content marketing automation!
 
 = Need help? =
-Be sure to check the [Support Threads](http://wordpress.org/support/plugin/featured-images-for-rss-feeds) to see if you’re question has already been answered. If not, submit your question and we’ll answer it. 
+Be sure to check the [Support Threads](http://wordpress.org/support/plugin/featured-images-for-rss-feeds) to see if you’re question has already been answered. If not, submit your question and we’ll answer it.
 
 = Love this plugin? =
 Please submit a [rating and review](https://wordpress.org/support/plugin/featured-images-for-rss-feeds/reviews/?filter=5#new-post), we'd appreciate your testimonial.
 
 (Have an issue? Post to the support forums before leaving a poor review.)
 
+= How can I report security issues? =
+
+You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team help validate, triage and handle any security vulnerabilities. [Report a security vulnerability.](https://patchstack.com/database/wordpress/plugin/featured-images-for-rss-feeds/vdp)
+
 == Screenshots ==
 1. An example RSS feed with images included to the left with the text wrapping to the right, medium sized.
 2. An example RSS feed with featured images included above the text, full sized.
 3. A screenshot of the plugin's options screen.
 4. A sad example of a plain RSS feed with no images, because they aren't using this plugin. Don't have sad RSS feeds, use this plugin!
-5. An actual email from Mailchimp showing how featured images can be added to the RSS Campaign.
-6. Premium Options screenshot showing Media and Enclosure Tag options, and all the extra RSS features. Upgrade to support our development efforts.
+
+== Upgrade Notice ==
+* Please update! v1.7.1: Updated Freemius SDK to v2.13.0
+* v1.7:
+* New: Now supports external image URLs in media or enclosure tags.
+* Fixed: option to use only media tag image now removed the first image properly.
+* Updated: Check feed first before adding media namespace to prevent duplicates from triggering invalid feed warnings.
+* Updated: Added support for the following languages: Spanish, French, German, Italian, Portuguese, Dutch, Russian, Chinese (Simplified), Japanese, Korean, Arabic, Turkish, Hindi, Polish, Swedish, Danish, Finnish, Greek, Czech, Hungarian, Thai, Hebrew
 
 == Changelog ==
+= 1.7.1 =
+* Updated Freemius SDK to v2.13.0
+
+= 1.7 =
+* New: Now supports external image URLs in media or enclosure tags.
+* Fixed: option to use only media tag image now removed the first image properly.
+* Updated: Check feed first before adding media namespace to prevent duplicates from triggering invalid feed warnings.
+* Updated: Added support for the following languages: Spanish, French, German, Italian, Portuguese, Dutch, Russian, Chinese (Simplified), Japanese, Korean, Arabic, Turkish, Hindi, Polish, Swedish, Danish, Finnish, Greek, Czech, Hungarian, Thai, Hebrew
+* Updated: Freemius SDK to latest version.
+
+= 1.6.5 =
+* Updated Freemius SDK to latest version.
+
+= 1.6.4 =
+* Updated Freemius SDK to latest version.
+
+= 1.6.3 =
+* Updated Freemius SDK to v2.9
+
+= 1.6.2 =
+* Updated Freemius SDK to v2.5.10.
+
+= 1.6.1 =
+* Updated Freemius SDK to privacy-focused v2.5.5, bump WP compatibility to v6.2
+
+= 1.6 =
+* Updated Freemius SDK, bump WP compatibility to v6.1
+
 = 1.5.9 =
 * Updated Freemius SDK with improvements and security fixes, bump WP compatibility to v5.9.1.
 
@@ -263,8 +303,3 @@ Please submit a [rating and review](https://wordpress.org/support/plugin/feature
 * Update: Translation ready, we're accepting translated pot files.
 * New: Now using Freemius for opt-in user usage data and better support, feature requests.
 * New: Premium Version now available with media and image tag support, custom images sizes, exclude categories, pre and post feed content, and more. Free trial available, and instant upgrades on checkout.
-
-== Upgrade Notice ==
-
-= 1.5.9 =
-* Updated Freemius SDK with improvements and security fixes, bump WP compatibility to v5.9.1. Update today!

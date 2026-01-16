@@ -11,7 +11,7 @@
 class SRM_Post_Type {
 
 	/**
-	 * Status code lables for reuse
+	 * Status code labels for reuse
 	 *
 	 * @var array
 	 */
@@ -22,7 +22,7 @@ class SRM_Post_Type {
 	 *
 	 * @var string
 	 */
-	private $redirect_search_term;
+	private $redirect_search_term = false;
 
 	/**
 	 * Sets up redirect manager
@@ -30,24 +30,36 @@ class SRM_Post_Type {
 	 * @since 1.8
 	 */
 	public function setup() {
-		$this->status_code_labels = srm_get_valid_status_codes_data();
-
+		add_action( 'init', array( $this, 'init_properties' ) );
 		add_action( 'init', array( $this, 'action_register_post_types' ) );
 		add_action( 'admin_init', array( $this, 'init_search_filters' ) );
 		add_action( 'save_post', array( $this, 'action_save_post' ) );
 		add_filter( 'manage_redirect_rule_posts_columns', array( $this, 'filter_redirect_columns' ) );
 		add_filter( 'manage_edit-redirect_rule_sortable_columns', array( $this, 'filter_redirect_sortable_columns' ) );
 		add_action( 'manage_redirect_rule_posts_custom_column', array( $this, 'action_custom_redirect_columns' ), 10, 2 );
+		add_action( 'quick_edit_custom_box', array( $this, 'action_quick_edit_custom_redirect_columns' ), 10, 2 );
+		add_action( 'bulk_edit_custom_box', array( $this, 'action_quick_edit_custom_redirect_columns' ), 10, 2 );
 		add_action( 'transition_post_status', array( $this, 'action_transition_post_status' ), 10, 3 );
 		add_filter( 'post_updated_messages', array( $this, 'filter_redirect_updated_messages' ) );
 		add_action( 'admin_notices', array( $this, 'action_redirect_chain_alert' ) );
 		add_filter( 'the_title', array( $this, 'filter_admin_title' ), 100, 2 );
-		add_filter( 'bulk_actions-edit-redirect_rule', array( $this, 'filter_bulk_actions' ) );
 		add_action( 'admin_print_styles-edit.php', array( $this, 'action_print_logo_css' ), 10, 1 );
 		add_action( 'admin_print_styles-post.php', array( $this, 'action_print_logo_css' ), 10, 1 );
 		add_action( 'admin_print_styles-post-new.php', array( $this, 'action_print_logo_css' ), 10, 1 );
 		add_filter( 'post_type_link', array( $this, 'filter_post_type_link' ), 10, 2 );
 		add_filter( 'default_hidden_columns', array( $this, 'filter_hidden_columns' ), 10, 1 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'load_resources' ), 10, 0 );
+		add_action( 'wp_ajax_srm_validate_from_url', array( $this, 'srm_validate_from_url' ), 10, 0 );
+		add_action( 'wp_ajax_srm_autocomplete', array( $this, 'srm_autocomplete' ), 10, 0 );
+	}
+
+	/**
+	 * Initialises class properties.
+	 *
+	 * @since 2.0.0
+	 */
+	public function init_properties() {
+		$this->status_code_labels = srm_get_valid_status_codes_data();
 	}
 
 	/**
@@ -97,7 +109,6 @@ class SRM_Post_Type {
 	 */
 	public function filter_disable_quick_edit( $actions, $post ) {
 		if ( 'redirect_rule' === get_post_type( $post ) && isset( $actions['inline hide-if-no-js'] ) ) {
-			unset( $actions['inline hide-if-no-js'] );
 			unset( $actions['view'] );
 		}
 
@@ -133,7 +144,8 @@ class SRM_Post_Type {
 			$search_term_like = '%' . $wpdb->esc_like( $search_term ) . '%';
 
 			$query->set( 's', $this->redirect_search_term );
-			unset( $this->redirect_search_term );
+			// Restore search term to a false value to prevent modifying the query again.
+			$this->redirect_search_term = false;
 
 			$clauses['distinct'] = 'DISTINCT';
 
@@ -183,21 +195,6 @@ class SRM_Post_Type {
 	}
 
 	/**
-	 * Limit the bulk actions available in the Manage Redirects view
-	 *
-	 * @param  array $actions Array of actions
-	 * @since 1.0
-	 * @return array
-	 */
-	public function filter_bulk_actions( $actions ) {
-
-		// No bulk editing at this time
-		unset( $actions['edit'] );
-
-		return $actions;
-	}
-
-	/**
 	 * Whether or not this is an admin page specific to the plugin
 	 *
 	 * @since 1.1
@@ -218,20 +215,41 @@ class SRM_Post_Type {
 	public function action_redirect_chain_alert() {
 		global $hook_suffix;
 		if ( $this->is_plugin_page() ) {
-
 			/**
-			 * check_for_possible_redirect_loops() runs in best case Theta(n^2) so if you have 100 redirects, this method
-			 * will be running slow. Let's disable it by default.
+			 * Filter whether possible redirect loop checking is enabled or not.
+			 *
+			 * @hook srm_check_for_possible_redirect_loops
+			 * @param {bool} $check_possible_loop Whether to check for redirect loops. Default true.
+			 * @returns {bool} Bool to check for redirect loops.
 			 */
-			if ( apply_filters( 'srm_check_for_possible_redirect_loops', false ) ) {
-				if ( srm_check_for_possible_redirect_loops() ) {
+			$possible_loop = apply_filters( 'srm_check_for_possible_redirect_loops', true );
+
+			if ( $possible_loop ) {
+				$cycle_source = SRM_Loop_Detection::detect_redirect_loops();
+				$paths        = SRM_Loop_Detection::get_cycle_source( $cycle_source );
+
+				if ( ! empty( $cycle_source ) ) {
 					?>
-					<div class="updated">
-						<p><?php esc_html_e( 'Safe Redirect Manager Warning: Possible redirect loops and/or chains have been created.', 'safe-redirect-manager' ); ?></p>
+					<div class="notice notice-error">
+						<p><?php esc_html_e( 'Safe Redirect Manager Error: The following redirects with the "Redirect To" value have created redirect loops.', 'safe-redirect-manager' ); ?></p>
+						<ul style="list-style: inside;">
+							<?php foreach ( $paths as $path ) : ?>
+								<li>
+								<?php
+									printf(
+										'<a href="%s">%s</a>',
+										esc_url( get_edit_post_link( esc_html( $path['id'] ) ) ),
+										esc_html( $path['path'] )
+									);
+								?>
+								</li>
+							<?php endforeach; ?>
+						</ul style>
 					</div>
 					<?php
 				}
 			}
+
 			if ( srm_max_redirects_reached() ) {
 
 				if ( 'post-new.php' === $hook_suffix ) {
@@ -290,24 +308,41 @@ class SRM_Post_Type {
 	public function filter_redirect_updated_messages( $messages ) {
 		global $post, $post_ID;
 
+		$message_tpl = function( $message ) {
+			return sprintf(
+				/* translators: %1%s: message status, %2%s: URL to the list of redirect rules */
+				__( 'Redirect rule %1$s. <a href="%2$s">&larr; Back to rules</a>', 'safe-redirect-manager' ),
+				$message,
+				esc_url( admin_url( 'edit.php?post_type=redirect_rule' ) )
+			);
+		};
+
 		$messages['redirect_rule'] = array(
 			0  => '', // Unused. Messages start at index 1.
-			1  => sprintf( esc_html__( 'Redirect rule updated.', 'safe-redirect-manager' ), esc_url( get_permalink( $post_ID ) ) ),
+			1  => $message_tpl( esc_html__( 'updated', 'safe-redirect-manager' ) ),
 			2  => esc_html__( 'Custom field updated.', 'safe-redirect-manager' ),
 			3  => esc_html__( 'Custom field deleted.', 'safe-redirect-manager' ),
-			4  => esc_html__( 'Redirect rule updated.', 'safe-redirect-manager' ),
-			/* translators: %s: date and time of the revision */
-			5  => isset( $_GET['revision'] ) ? sprintf( esc_html__( 'Redirect rule restored to revision from %s', 'safe-redirect-manager' ), wp_post_revision_title( (int) $_GET['revision'], false ) ) : false,
-			6  => sprintf( esc_html__( 'Redirect rule published.', 'safe-redirect-manager' ), esc_url( get_permalink( $post_ID ) ) ),
-			7  => esc_html__( 'Redirect rule saved.', 'safe-redirect-manager' ),
-			8  => sprintf( esc_html__( 'Redirect rule submitted.', 'safe-redirect-manager' ), esc_url( add_query_arg( 'preview', 'true', get_permalink( $post_ID ) ) ) ),
-			9  => sprintf(
-				esc_html__( 'Redirect rule scheduled for: %1$s.', 'safe-redirect-manager' ),
-				// translators: Publish box date format, see http://php.net/date
-				date_i18n( esc_html__( 'M j, Y @ G:i' ), strtotime( $post->post_date ) ),
-				esc_url( get_permalink( $post_ID ) )
+			4  => $message_tpl( __( 'updated', 'safe-redirect-manager' ) ),
+			5  => isset( $_GET['revision'] )
+				? $message_tpl(
+					sprintf(
+						/* translators: %s: the revision title */
+						esc_html__( 'restored to revision from %s', 'safe-redirect-manager' ),
+						wp_post_revision_title( (int) $_GET['revision'], false )
+					)
+				)
+				: false,
+			6  => $message_tpl( esc_html__( 'published', 'safe-redirect-manager' ) ),
+			7  => $message_tpl( esc_html__( 'saved', 'safe-redirect-manager' ) ),
+			8  => $message_tpl( esc_html__( 'submitted', 'safe-redirect-manager' ) ),
+			9  => $message_tpl(
+				sprintf(
+					/* translators: %s: publish box date format, see http://php.net/date */
+					esc_html__( 'scheduled for %s', 'safe-redirect-manager' ),
+					date_i18n( esc_html__( 'M j, Y @ G:i' ), strtotime( $post->post_date ) )
+				)
 			),
-			10 => sprintf( esc_html__( 'Redirect rule draft updated.', 'safe-redirect-manager' ), esc_url( add_query_arg( 'preview', 'true', get_permalink( $post_ID ) ) ) ),
+			10 => $message_tpl( esc_html__( 'draft updated', 'safe-redirect-manager' ) ),
 		);
 
 		return $messages;
@@ -347,6 +382,8 @@ class SRM_Post_Type {
 			echo esc_html( get_post_meta( $post_id, '_redirect_rule_to', true ) );
 		} elseif ( 'srm_redirect_rule_status_code' === $column ) {
 			echo absint( get_post_meta( $post_id, '_redirect_rule_status_code', true ) );
+		} elseif ( 'srm_redirect_rule_force_https' === $column ) {
+			echo absint( get_post_meta( $post_id, '_force_https', true ) ) ? '&#10003;' : 'x';
 		} elseif ( 'menu_order' === $column ) {
 			global $post;
 			echo esc_html( $post->menu_order );
@@ -363,6 +400,7 @@ class SRM_Post_Type {
 	public function filter_redirect_columns( $columns ) {
 		$columns['srm_redirect_rule_to']          = esc_html__( 'Redirect To', 'safe-redirect-manager' );
 		$columns['srm_redirect_rule_status_code'] = esc_html__( 'HTTP Status Code', 'safe-redirect-manager' );
+		$columns['srm_redirect_rule_force_https'] = esc_html__( 'Force https', 'safe-redirect-manager' );
 		$columns['menu_order']                    = esc_html__( 'Order', 'safe-redirect-manager' );
 
 		// Change the title column
@@ -385,6 +423,56 @@ class SRM_Post_Type {
 	public function filter_redirect_sortable_columns( $columns ) {
 		$columns['menu_order'] = 'menu_order';
 		return $columns;
+	}
+
+	/**
+	 * Add custom fields to the quick edit screen.
+	 *
+	 * @param string $column_name Name of the column to edit.
+	 * @param string $post_type   The post type slug, or current screen name if this is a taxonomy list table.
+	 *
+	 * @return void
+	 */
+	public function action_quick_edit_custom_redirect_columns( $column_name, $post_type ) {
+		if ( 'redirect_rule' !== $post_type ) {
+			return;
+		}
+
+		if ( 'srm_redirect_rule_status_code' === $column_name ) :
+			wp_nonce_field( 'srm-save-redirect-ajax-meta', 'srm_redirect_ajax_nonce' );
+			?>
+			<fieldset class="inline-edit-col-right margin-top-0">
+				<div class="inline-edit-col">
+					<div class="inline-edit-group wp-clearfix">
+						<label class="inline-edit-status alignleft">
+							<span class="title"><?php esc_html_e( 'HTTP Status Code', 'safe-redirect-manager' ); ?></span>
+							<select name="srm_redirect_rule_status_code">
+								<option value="-1"><?php esc_html_e( '— No Change —', 'safe-redirect-manager' ); ?></option>
+								<?php foreach ( srm_get_valid_status_codes() as $code ) : ?>
+									<option value="<?php echo esc_attr( $code ); ?>"><?php echo esc_html( $code . ' ' . $this->status_code_labels[ $code ] ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</label>
+					</div>
+				</div>
+			</fieldset>
+			<?php
+		endif;
+
+		if ( 'srm_redirect_rule_force_https' === $column_name ) :
+			?>
+			<fieldset class="inline-edit-col-right margin-top-0">
+				<div class="inline-edit-col">
+					<div class="inline-edit-group wp-clearfix">
+						<label class="inline-edit-status alignleft">
+							<span class="title"><?php esc_html_e( 'Force https', 'safe-redirect-manager' ); ?></span>
+							<input type="checkbox" name="srm_redirect_rule_force_https" value="1"/>
+						</label>
+					</div>
+				</div>
+			</fieldset>
+			<?php
+		endif;
 	}
 
 	/**
@@ -429,6 +517,18 @@ class SRM_Post_Type {
 				delete_post_meta( $post_id, '_redirect_rule_status_code' );
 			}
 
+			if ( ! empty( $_POST['srm_force_https'] ) ) {
+				update_post_meta( $post_id, '_force_https', true );
+			} else {
+				delete_post_meta( $post_id, '_force_https' );
+			}
+
+			if ( ! empty( $_POST['srm_redirect_rule_message'] ) ) {
+				update_post_meta( $post_id, '_redirect_rule_message', sanitize_text_field( $_POST['srm_redirect_rule_message'] ) );
+			} else {
+				delete_post_meta( $post_id, '_redirect_rule_message' );
+			}
+
 			if ( ! empty( $_POST['srm_redirect_rule_notes'] ) ) {
 				update_post_meta( $post_id, '_redirect_rule_notes', sanitize_text_field( $_POST['srm_redirect_rule_notes'] ) );
 			} else {
@@ -441,6 +541,23 @@ class SRM_Post_Type {
 			 * redirect info is saved, updating the cache before it is not sufficient.
 			 */
 			srm_flush_cache();
+		}
+
+		if ( ! empty( $_REQUEST['srm_redirect_ajax_nonce'] )
+			&& wp_verify_nonce( $_REQUEST['srm_redirect_ajax_nonce'], 'srm-save-redirect-ajax-meta' )
+			&& current_user_can( 'edit_post', $post_id )
+		) {
+			if ( ! empty( $_REQUEST['srm_redirect_rule_status_code'] ) && '-1' !== $_REQUEST['srm_redirect_rule_status_code'] ) {
+				update_post_meta( $post_id, '_redirect_rule_status_code', absint( $_REQUEST['srm_redirect_rule_status_code'] ) );
+			} elseif ( '-1' !== $_REQUEST['srm_redirect_rule_status_code'] ) {
+				delete_post_meta( $post_id, '_redirect_rule_status_code' );
+			}
+
+			if ( ! empty( $_REQUEST['srm_redirect_rule_force_https'] ) ) {
+				update_post_meta( $post_id, '_force_https', true );
+			} else {
+				delete_post_meta( $post_id, '_force_https' );
+			}
 		}
 	}
 
@@ -464,6 +581,13 @@ class SRM_Post_Type {
 			$role->add_cap( $redirect_capability );
 		}
 
+		/**
+		 * Filter the capability required to manage redirects.
+		 *
+		 * @hook srm_restrict_to_capability
+		 * @param {string} $redirect_capability The required capability. Default `srm_manage_redirects`.
+		 * @returns {string} The required capability.
+		 */
 		return apply_filters( 'srm_restrict_to_capability', $redirect_capability );
 	}
 
@@ -478,8 +602,8 @@ class SRM_Post_Type {
 		$redirect_labels = array(
 			'name'               => esc_html_x( 'Safe Redirect Manager', 'post type general name', 'safe-redirect-manager' ),
 			'singular_name'      => esc_html_x( 'Redirect', 'post type singular name', 'safe-redirect-manager' ),
-			'add_new'            => _x( 'Create Redirect Rule', 'redirect rule', 'safe-redirect-manager' ),
-			'add_new_item'       => esc_html__( 'Safe Redirect Manager', 'safe-redirect-manager' ),
+			'add_new'            => esc_html_x( 'Create Redirect Rule', 'redirect rule', 'safe-redirect-manager' ),
+			'add_new_item'       => esc_html__( 'Create Redirect Rule', 'safe-redirect-manager' ),
 			'edit_item'          => esc_html__( 'Edit Redirect Rule', 'safe-redirect-manager' ),
 			'new_item'           => esc_html__( 'New Redirect Rule', 'safe-redirect-manager' ),
 			'all_items'          => esc_html__( 'Safe Redirect Manager', 'safe-redirect-manager' ),
@@ -545,16 +669,32 @@ class SRM_Post_Type {
 	public function redirect_rule_metabox( $post ) {
 		wp_nonce_field( 'srm-save-redirect-meta', 'srm_redirect_nonce' );
 
-		$redirect_from  = get_post_meta( $post->ID, '_redirect_rule_from', true );
-		$redirect_to    = get_post_meta( $post->ID, '_redirect_rule_to', true );
-		$redirect_notes = get_post_meta( $post->ID, '_redirect_rule_notes', true );
-		$status_code    = get_post_meta( $post->ID, '_redirect_rule_status_code', true );
-		$enable_regex   = get_post_meta( $post->ID, '_redirect_rule_from_regex', true );
+		$redirect_from    = get_post_meta( $post->ID, '_redirect_rule_from', true );
+		$redirect_to      = get_post_meta( $post->ID, '_redirect_rule_to', true );
+		$redirect_notes   = get_post_meta( $post->ID, '_redirect_rule_notes', true );
+		$status_code      = get_post_meta( $post->ID, '_redirect_rule_status_code', true );
+		$enable_regex     = get_post_meta( $post->ID, '_redirect_rule_from_regex', true );
+		$force_https      = get_post_meta( $post->ID, '_force_https', true );
+		$redirect_message = get_post_meta( $post->ID, '_redirect_rule_message', true );
 
 		if ( empty( $status_code ) ) {
+			/**
+			 * Filter the default HTTP status code to redirect with.
+			 *
+			 * Which HTTP redirect code safe redirect manager should default to. This can
+			 * be overridden in the dashboard for each redirect.
+			 *
+			 * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections
+			 *
+			 * @hook srm_default_direct_status
+			 * @param {int} $default_status_code Default redirect status. Default value `302`.
+			 * @returns {int} Redirect status.
+			 */
 			$status_code = apply_filters( 'srm_default_direct_status', 302 );
 		}
+
 		?>
+		<div class="notice notice-error" id="message" style="display: none;"></div>
 		<p>
 			<label for="srm_redirect_rule_from"><strong><?php esc_html_e( '* Redirect From:', 'safe-redirect-manager' ); ?></strong></label><br />
 			<input type="text" name="srm_redirect_rule_from" id="srm_redirect_rule_from" value="<?php echo esc_attr( $redirect_from ); ?>" />
@@ -565,12 +705,13 @@ class SRM_Post_Type {
 
 		<p>
 			<label for="srm_redirect_rule_to"><strong><?php esc_html_e( '* Redirect To:', 'safe-redirect-manager' ); ?></strong></label><br />
-			<input class="widefat" type="text" name="srm_redirect_rule_to" id="srm_redirect_rule_to" value="<?php echo esc_attr( $redirect_to ); ?>" />
+			<input class="widefat" type="text" name="srm_redirect_rule_to" id="srm_redirect_rule_to" value="<?php echo esc_attr( urldecode( $redirect_to ) ); ?>" />
 		</p>
+		<p class="description" id="srm_to_disabled_message" style="display:none;"><em><?php esc_html_e( 'The "Redirect to" value doesn\'t apply for 4xx error codes.', 'safe-redirect-manager' ); ?></em></p>
 		<p class="description"><?php esc_html_e( 'This can be a URL or a path relative to the root of your website (not your WordPress installation). Ending with a (*) wildcard character will append the request match to the redirect.', 'safe-redirect-manager' ); ?></p>
 
 		<p>
-			<label for="srm_redirect_rule_status_code"><strong><?php esc_html_e( '* HTTP Status Code:', 'safe-redirect-manager' ); ?></strong></label>
+			<label for="srm_redirect_rule_status_code"><strong><?php esc_html_e( '* HTTP Status Code:', 'safe-redirect-manager' ); ?></strong></label><br/>
 			<select name="srm_redirect_rule_status_code" id="srm_redirect_rule_status_code">
 				<?php foreach ( srm_get_valid_status_codes() as $code ) : ?>
 					<option value="<?php echo esc_attr( $code ); ?>" <?php selected( $status_code, $code ); ?>><?php echo esc_html( $code . ' ' . $this->status_code_labels[ $code ] ); ?></option>
@@ -579,9 +720,22 @@ class SRM_Post_Type {
 			<em><?php esc_html_e( "If you don't know what this is, leave it as is.", 'safe-redirect-manager' ); ?></em>
 		</p>
 
+		<p id="srm_redirect_rule_message_container">
+			<label for="srm_redirect_rule_message"><strong><?php esc_html_e( 'Message:', 'safe-redirect-manager' ); ?></strong></label>
+			<textarea name="srm_redirect_rule_message" id="srm_redirect_rule_message" class="widefat"><?php echo esc_textarea( $redirect_message ); ?></textarea>
+			<em><?php esc_html_e( 'Optionally display a message to users when they navigate to a 403 or 410 endpoint.', 'safe-redirect-manager' ); ?></em>
+		</p>
+
+		<p>
+			<label><strong><?php esc_html_e( 'Redirect Protocol:', 'safe-redirect-manager' ); ?></strong></label><br/>
+			<label>
+				<input type="checkbox" name="srm_force_https" value="1" <?php checked( $force_https, true ); ?>/> <?php esc_html_e( 'Force https', 'safe-redirect-manager' ); ?>
+			</label>
+		</p>
+
 		<p>
 			<label for="srm_redirect_rule_notes"><strong><?php esc_html_e( 'Notes:', 'safe-redirect-manager' ); ?></strong></label>
-			<textarea name="srm_redirect_rule_notes" id="srm_redirect_rule_notes" class="widefat"><?php echo esc_attr( $redirect_notes ); ?></textarea>
+			<textarea name="srm_redirect_rule_notes" id="srm_redirect_rule_notes" class="widefat"><?php echo esc_textarea( $redirect_notes ); ?></textarea>
 			<em><?php esc_html_e( 'Optionally leave notes on this redirect e.g. why was it created.', 'safe-redirect-manager' ); ?></em>
 		</p>
 		<?php
@@ -637,5 +791,142 @@ class SRM_Post_Type {
 		}
 
 		return $instance;
+	}
+
+	/**
+	 * Load scripts.
+	 *
+	 * @return void
+	 */
+	public function load_resources() {
+		if ( 'redirect_rule' === get_post_type() ) {
+			wp_enqueue_style( 'redirectjs', SRM_PLUGIN_URL . 'assets/css/redirect.css', array(), SRM_VERSION );
+			wp_enqueue_script( 'bulk-select', SRM_PLUGIN_URL . 'assets/js/bulk-select.js', array( 'jquery' ), SRM_VERSION, true );
+			wp_enqueue_script( 'redirectjs', SRM_PLUGIN_URL . 'assets/js/redirect.js', array( 'jquery' ), SRM_VERSION );
+			wp_enqueue_script( 'quick-bulk-editjs', SRM_PLUGIN_URL . 'assets/js/quick-bulk-edit.js', array( 'jquery', 'inline-edit-post' ), SRM_VERSION );
+			wp_localize_script(
+				'redirectjs',
+				'redirectValidation',
+				array(
+					'urlError'   => __( 'There are some issues validating the URL. Please try again.', 'safe-redirect-manager' ),
+					'fail'       => __( 'There is an existing redirect with the same Redirect From URL. You may <a href="%s">Edit</a> the redirect or try other `from` URL.', 'safe-redirect-manager' ),
+					'ajax_url'   => admin_url( 'admin-ajax.php' ),
+					'ajax_nonce' => wp_create_nonce( 'srm_autocomplete_nonce' ),
+				)
+			);
+		}
+	}
+
+	/**
+	 * Fetches posts and pages based on the 'Redirect to:' field value.
+	 * This function handles an AJAX request, returning a JSON array of posts
+	 * and pages that match the search term.
+	 *
+	 * @return void
+	 */
+	public function srm_autocomplete() {
+		check_ajax_referer( 'srm_autocomplete_nonce', 'security' );
+
+		if ( ! current_user_can( 'srm_manage_redirects' ) ) {
+			echo wp_json_encode( array() );
+			wp_die();
+		}
+
+		$search_term = isset( $_REQUEST['term'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['term'] ) ) : false;
+		if ( ! $search_term ) {
+			echo wp_json_encode( array() );
+			wp_die();
+		}
+
+		// Remove the beginning / to prevent 0 results.
+		$search_term = ltrim( $search_term, '/' );
+
+		$query = get_posts(
+			array(
+				// Get publicly viewable post types, except for redirect_rule.
+				'post_type'      => array_diff_key(
+					array_filter(
+						get_post_types(),
+						'is_post_type_viewable'
+					),
+					array(
+						'redirect_rule' => '',
+					)
+				),
+				's'              => $search_term,
+				'posts_per_page' => 5,
+			)
+		);
+
+		if ( ! $query ) {
+			echo wp_json_encode( array() );
+			wp_die();
+		}
+
+		$suggestions = array();
+		foreach ( $query as $key => $post ) {
+			$suggestions[] = array(
+				'relative_url' => wp_make_link_relative( get_the_permalink( $post->ID ) ),
+				'post_title'   => $post->post_title,
+				'post_type'    => $post->post_type,
+			);
+		}
+
+		echo wp_json_encode( $suggestions );
+		wp_die();
+	}
+
+	/**
+	 * Validate whether the from URL already exists or not.
+	 *
+	 * @return void
+	 */
+	public function srm_validate_from_url() {
+		if ( ! isset( $_GET['_wpnonce'] ) || ! isset( $_GET['from'] ) ) {
+			echo 0;
+			die();
+		}
+
+		$_wpnonce = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) );
+		if ( ! wp_verify_nonce( $_wpnonce, 'srm-save-redirect-meta' ) ) {
+			echo 0;
+			die();
+		}
+
+		$from = srm_sanitize_redirect_from( wp_unslash( $_GET['from'] ) );
+
+		/**
+		 * SRM treats '/sample-page' and 'sample-page' equally.
+		 * If the $from value does not start with a forward slash,
+		 * then we normalize it by adding one.
+		 */
+		$from = '/' === substr( $from, 0, 1 ) ? $from : '/' . $from;
+
+		$existing_post_ids = new WP_Query(
+			[
+				'meta_key'               => '_redirect_rule_from',
+				'meta_value'             => $from,
+				'fields'                 => 'ids',
+				'posts_per_page'         => 1,
+				'no_found_rows'          => true,
+				'post_type'              => 'redirect_rule',
+				'post_status'            => 'publish',
+				'orderby'                => 'ID',
+				'order'                  => 'ASC',
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+			]
+		);
+
+		// If no posts found, then bail out.
+		if ( empty( $existing_post_ids->posts ) ) {
+			echo 1;
+			die();
+		}
+
+		$existing_post_id = $existing_post_ids->posts[0];
+
+		echo esc_url( get_edit_post_link( $existing_post_id ) );
+		die();
 	}
 }

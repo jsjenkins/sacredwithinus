@@ -2,12 +2,14 @@
 
 namespace WP_Rocket\Engine\Optimization\RUCSS\Database\Queries;
 
-use WP_Rocket\Dependencies\Database\Query;
+use WP_Rocket\Engine\Common\Database\Queries\AbstractQuery;
+use WP_Rocket\Engine\Optimization\RUCSS\Database\Row\UsedCSS as UsedCSSRow;
+use WP_Rocket\Engine\Optimization\RUCSS\Database\Schemas\UsedCSS as UsedCSSSchema;
 
 /**
  * RUCSS UsedCSS Query.
  */
-class UsedCSS extends Query {
+class UsedCSS extends AbstractQuery {
 
 	/**
 	 * Name of the database table to query.
@@ -32,7 +34,7 @@ class UsedCSS extends Query {
 	 *
 	 * @var   string
 	 */
-	protected $table_schema = '\\WP_Rocket\\Engine\\Optimization\\RUCSS\\Database\\Schemas\\UsedCSS';
+	protected $table_schema = UsedCSSSchema::class;
 
 	/** Item ******************************************************************/
 
@@ -65,5 +67,54 @@ class UsedCSS extends Query {
 	 *
 	 * @var   mixed
 	 */
-	protected $item_shape = '\\WP_Rocket\\Engine\\Optimization\\RUCSS\\Database\\Row\\UsedCSS';
+	protected $item_shape = UsedCSSRow::class;
+
+	/**
+	 * Complete a job.
+	 *
+	 * @param string  $url Url from DB row.
+	 * @param boolean $is_mobile Is mobile from DB row.
+	 * @param string  $hash Hash.
+	 *
+	 * @return bool
+	 */
+	public function make_status_completed( string $url, bool $is_mobile, string $hash = '' ) {
+		// Get the database interface.
+		$db = $this->get_db();
+
+		// Bail if no database interface is available.
+		if ( ! $db ) {
+			return false;
+		}
+
+		$prefixed_table_name = $db->prefix . $this->table_name;
+
+		$data = [
+			'hash'   => $hash,
+			'status' => 'completed',
+		];
+
+		$where = [
+			'url'       => untrailingslashit( $url ),
+			'is_mobile' => $is_mobile,
+		];
+
+		return $db->update( $prefixed_table_name, $data, $where );
+	}
+
+	/**
+	 * Get number of rows with the same hash value.
+	 *
+	 * @param string $hash Hash.
+	 *
+	 * @return int
+	 */
+	public function count_rows_by_hash( string $hash ): int {
+		return $this->query(
+			[
+				'hash'  => $hash,
+				'count' => true,
+			]
+		);
+	}
 }

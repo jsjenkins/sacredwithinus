@@ -5,11 +5,7 @@ $scanner = wfScanner::shared();
 $d = new wfDashboard();
 ?>
 <?php
-if (wfOnboardingController::shouldShowAttempt3()) {
-	echo wfView::create('onboarding/disabled-overlay')->render();
-	echo wfView::create('onboarding/banner')->render();
-}
-else if (wfConfig::get('touppPromptNeeded')) {
+if (!wfOnboardingController::shouldShowAttempt3() && wfConfig::get('touppPromptNeeded')) {
 	echo wfView::create('gdpr/disabled-overlay')->render();
 	echo wfView::create('gdpr/banner')->render();
 }
@@ -121,7 +117,7 @@ else if (wfConfig::get('touppPromptNeeded')) {
 											<?php
 											echo wfView::create('common/status-critical', array(
 												'id' => 'wf-premium-alert',
-												'title' => __('Premium License Expiring', 'wordfence'),
+												'title' => sprintf(/* translators: %s: License type */__('%s License Expiring', 'wordfence'), wfLicense::current()->getBaseTypeLabel()),
 												'subtitle' => __('Auto-renew is disabled', 'wordfence'),
 												'link' => 'https://www.wordfence.com/gnl1renewExpiring/manage-wordfence-api-keys/',
 												'linkLabel' => __('Renew License', 'wordfence'),
@@ -180,7 +176,7 @@ else if (wfConfig::get('touppPromptNeeded')) {
 												
 												echo wfView::create('dashboard/status-renewing', array(
 													'id' => 'wf-premium-alert',
-													'title' => __('Premium License Expiring', 'wordfence'), 
+													'title' => sprintf(/* translators: %s: License type */__('%s License Expiring', 'wordfence'), wfLicense::current()->getBaseTypeLabel()),
 													'subtitle' => $subtitle,
 													'link' => 'https://www.wordfence.com/gnl1reviewExpiring/manage-wordfence-api-keys/',
 													'linkLabel' => __('Review Payment Method', 'wordfence'),

@@ -1,22 +1,16 @@
 <?php
 namespace Imagify\Bulk;
 
-defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
-
 /**
  * Falback class for bulk.
  *
- * @since  1.9
- * @author Grégory Viguier
+ * @since 1.9
  */
-class Noop implements BulkInterface {
-
+class Noop extends AbstractBulk {
 	/**
 	 * Get all unoptimized media ids.
 	 *
-	 * @since  1.9
-	 * @access public
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param  int $optimization_level The optimization level.
 	 * @return array                   A list of unoptimized media. Array keys are media IDs prefixed with an underscore character, array values are the main file’s URL.
@@ -26,12 +20,11 @@ class Noop implements BulkInterface {
 	}
 
 	/**
-	 * Get ids of all optimized media without WebP versions.
+	 *   * Get ids of all optimized media without Next gen versions.
 	 *
-	 * @since  1.9
-	 * @since  1.9.5 The method doesn't return the IDs directly anymore.
-	 * @access public
-	 * @author Grégory Viguier
+	 * @since 2.2
+	 *
+	 * @param string $format Format we are looking for. (webp|avif).
 	 *
 	 * @return array {
 	 *     @type array $ids    A list of media IDs.
@@ -41,7 +34,7 @@ class Noop implements BulkInterface {
 	 *     }
 	 * }
 	 */
-	public function get_optimized_media_ids_without_webp() {
+	public function get_optimized_media_ids_without_format( $format ) {
 		return [
 			'ids'    => [],
 			'errors' => [
@@ -52,24 +45,9 @@ class Noop implements BulkInterface {
 	}
 
 	/**
-	 * Tell if there are optimized media without WebP versions.
-	 *
-	 * @since  1.9
-	 * @access public
-	 * @author Grégory Viguier
-	 *
-	 * @return int The number of media.
-	 */
-	public function has_optimized_media_without_webp() {
-		return 0;
-	}
-
-	/**
 	 * Get the context data.
 	 *
-	 * @since  1.9
-	 * @access public
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @return array {
 	 *     The formated data.

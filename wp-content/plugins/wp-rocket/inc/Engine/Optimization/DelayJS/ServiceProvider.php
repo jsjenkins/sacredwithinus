@@ -1,21 +1,21 @@
 <?php
+declare(strict_types=1);
+
 namespace WP_Rocket\Engine\Optimization\DelayJS;
 
 use WP_Rocket\Dependencies\League\Container\ServiceProvider\AbstractServiceProvider;
+use WP_Rocket\Engine\Optimization\DelayJS\Admin\{
+	Settings,
+	SiteList,
+	Subscriber as AdminSubscriber
+};
 
 /**
  * Service provider for the WP Rocket Delay JS
- *
- * @since  3.7
  */
 class ServiceProvider extends AbstractServiceProvider {
-
 	/**
-	 * The provides array is a way to let the container
-	 * know that a service is provided by this service
-	 * provider. Every service that is registered via
-	 * this service provider must have an alias added
-	 * to this array or it will be ignored.
+	 * Array of services provided by this service provider
 	 *
 	 * @var array
 	 */
@@ -24,24 +24,57 @@ class ServiceProvider extends AbstractServiceProvider {
 		'delay_js_admin_subscriber',
 		'delay_js_html',
 		'delay_js_subscriber',
+		'delay_js_sitelist',
 	];
+
+	/**
+	 * Check if the service provider provides a specific service.
+	 *
+	 * @param string $id The id of the service.
+	 *
+	 * @return bool
+	 */
+	public function provides( string $id ): bool {
+		return in_array( $id, $this->provides, true );
+	}
 
 	/**
 	 * Registers items with the container
 	 *
 	 * @return void
 	 */
-	public function register() {
-		$this->getContainer()->add( 'delay_js_settings', 'WP_Rocket\Engine\Optimization\DelayJS\Admin\Settings' );
-		$this->getContainer()->share( 'delay_js_admin_subscriber', 'WP_Rocket\Engine\Optimization\DelayJS\Admin\Subscriber' )
-			->addArgument( $this->getContainer()->get( 'delay_js_settings' ) )
-			->addTag( 'admin_subscriber' );
-		$this->getContainer()->add( 'delay_js_html', 'WP_Rocket\Engine\Optimization\DelayJS\HTML' )
-			->addArgument( $this->getContainer()->get( 'options' ) );
-		$this->getContainer()->share( 'delay_js_subscriber', 'WP_Rocket\Engine\Optimization\DelayJS\Subscriber' )
-			->addArgument( $this->getContainer()->get( 'delay_js_html' ) )
-			->addArgument( rocket_direct_filesystem() )
-			->addArgument( $this->getContainer()->get( 'options' ) )
-			->addTag( 'front_subscriber' );
+	public function register(): void {
+		$this->getContainer()->add( 'delay_js_sitelist', SiteList::class )
+			->addArguments(
+				[
+					'dynamic_lists',
+					'options',
+					'options_api',
+				]
+			);
+		$this->getContainer()->add( 'delay_js_settings', Settings::class )
+			->addArgument( 'options_api' );
+		$this->getContainer()->addShared( 'delay_js_admin_subscriber', AdminSubscriber::class )
+			->addArguments(
+				[
+					'delay_js_settings',
+					'delay_js_sitelist',
+				]
+			);
+		$this->getContainer()->add( 'delay_js_html', HTML::class )
+			->addArguments(
+				[
+					'options',
+					'dynamic_lists_defaultlists_data_manager',
+					'logger',
+				]
+			);
+		$this->getContainer()->addShared( 'delay_js_subscriber', Subscriber::class )
+			->addArguments(
+				[
+					'delay_js_html',
+					rocket_direct_filesystem(),
+				]
+			);
 	}
 }

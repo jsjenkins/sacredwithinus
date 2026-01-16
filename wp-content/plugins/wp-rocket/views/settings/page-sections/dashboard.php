@@ -22,6 +22,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
+$rocket_manual_preload = (bool) get_rocket_option( 'manual_preload', false );
 ?>
 <div id="<?php echo esc_attr( $data['id'] ); ?>" class="wpr-Page">
 	<div class="wpr-sectionHeader">
@@ -41,9 +42,20 @@ defined( 'ABSPATH' ) || exit;
 			<br>
 			<?php esc_html_e( 'Your website should be loading faster now!', 'rocket' ); ?>
 			</h2>
-				<div class="wpr-notice-description"><?php esc_html_e( 'To guarantee fast websites, WP Rocket automatically applies 80% of web performance best practices.', 'rocket' ); ?><br> <?php esc_html_e( 'We also enable options that provide immediate benefits to your website.', 'rocket' ); ?></div>
-				<div class="wpr-notice-continue"><?php esc_html_e( 'Continue to the options to further optimize your site!', 'rocket' ); ?></div>
-				<a id="wpr-congratulations-notice" class="wpr-notice-close wpr-icon-close rocket-dismiss" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=rocket_ignore&box=rocket_activation_notice' ), 'rocket_ignore_rocket_activation_notice' ) ); ?>"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice.', 'rocket' ); ?></span></a>
+		<div class="wpr-notice-description"><?php esc_html_e( 'To guarantee fast websites, WP Rocket automatically applies 80% of web performance best practices.', 'rocket' ); ?><br> <?php esc_html_e( 'We also enable options that provide immediate benefits to your website.', 'rocket' ); ?></div>
+			<?php if ( ! empty( $data['rocket_insights_enabled'] ) ) : ?>
+			<div class="wpr-notice-continue">
+				<?php
+				printf(
+					// translators: %1$s = opening <strong> tag, %2$s = closing </strong> tag.
+					esc_html__( 'Check the %1$sRocket Insights%2$s tab to track your top pages, quickly spot issues, and get in-depth insights to further optimize your website speed.', 'rocket' ),
+					'<strong>',
+					'</strong>'
+				);
+				?>
+			</div>
+			<?php endif; ?>
+			<a id="wpr-congratulations-notice" class="wpr-notice-close wpr-icon-close rocket-dismiss" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=rocket_ignore&box=rocket_activation_notice' ), 'rocket_ignore_rocket_activation_notice' ) ); ?>"><span class="screen-reader-text"><?php esc_html_e( 'Dismiss this notice', 'rocket' ); ?></span></a>
 		</div>
 	</div>
 	<?php endif; ?>
@@ -80,7 +92,14 @@ defined( 'ABSPATH' ) || exit;
 						<span class="wpr-title3"><?php esc_html_e( 'License', 'rocket' ); ?></span>
 						<span class="wpr-infoAccount wpr-isValid" id="wpr-account-data">
 							<?php echo esc_html( $data['customer_data']['license_type'] ); ?>
-						</span><br>
+						</span>
+						<?php if ( $data['customer_data']['is_from_one_dot_com'] ) : ?>
+							<span>
+								<?php esc_html_e( 'with', 'rocket' ); ?>
+								<img src="<?php echo esc_url( rocket_get_constant( 'WP_ROCKET_ASSETS_IMG_URL' ) . 'one-com-logo.svg' ); ?>" width="80" alt="One.com">
+							</span>
+						<?php endif; ?>
+						<br>
 						<?php
 						/**
 						 * Fires when displaying the license information
@@ -111,8 +130,8 @@ defined( 'ABSPATH' ) || exit;
 					</div>
 				</div>
 			</div>
-			<?php endif; ?>
-			<?php
+				<?php
+			endif;
 			/**
 			 * Fires after the account data section on the WP Rocket settings dashboard
 			 *
@@ -120,12 +139,15 @@ defined( 'ABSPATH' ) || exit;
 			 */
 			do_action( 'rocket_dashboard_after_account_data' );
 			?>
-			<?php
-				$this->render_settings_sections( $data['id'] );
-			?>
 		</div>
 
 		<div class="wpr-Page-col wpr-Page-col--fixed">
+			<?php
+			/**
+			 * Fires in the dashboard sidebar
+			 */
+			do_action( 'rocket_dashboard_sidebar' );
+			?>
 			<div class="wpr-optionHeader">
 				<h3 class="wpr-title2"><?php esc_html_e( 'Quick Actions', 'rocket' ); ?></h3>
 			</div>
@@ -134,43 +156,26 @@ defined( 'ABSPATH' ) || exit;
 				<fieldset class="wpr-fieldsContainer-fieldset">
 					<?php if ( current_user_can( 'rocket_purge_cache' ) ) : ?>
 					<div class="wpr-field">
-						<h4 class="wpr-title3"><?php esc_html_e( 'Remove all cached files', 'rocket' ); ?></h4>
+						<h4 class="wpr-title3"><?php esc_html_e( 'Cache Files', 'rocket' ); ?></h4>
+						<p><?php echo $rocket_manual_preload ? esc_html__( 'Clear and preload all the cache files.', 'rocket' ) : esc_html__( 'Clear all the cache files.', 'rocket' ); ?></p>
 						<?php
 						$this->render_action_button(
 							'link',
 							'purge_cache',
 							[
-								'label'      => __( 'Clear cache', 'rocket' ),
+								'label'      => $rocket_manual_preload ? __( 'Clear and preload', 'rocket' ) : __( 'Clear', 'rocket' ),
 								'parameters' => [
 									'type' => 'all',
 								],
 								'attributes' => [
-									'class' => 'wpr-button wpr-button--icon wpr-button--small wpr-icon-trash',
+									'class' => 'wpr-button wpr-button--icon wpr-button--small wpr-icon-trash wpr-button--no-min-width',
 								],
 							]
 						);
 						?>
 					</div>
 					<?php endif; ?>
-					<?php if ( get_rocket_option( 'manual_preload' ) && current_user_can( 'rocket_preload_cache' ) ) : ?>
-					<div class="wpr-field">
-						<h4 class="wpr-title3"><?php esc_html_e( 'Start cache preloading', 'rocket' ); ?></h4>
-						<?php
-						$this->render_action_button(
-							'link',
-							'preload',
-							[
-								'label'      => __( 'Preload cache', 'rocket' ),
-								'attributes' => [
-									'class' => 'wpr-button wpr-button--icon wpr-button--small wpr-icon-refresh',
-								],
-							]
-						);
-						?>
-					</div>
-					<?php endif; ?>
-
-					<?php if ( get_rocket_option( 'async_css' ) && apply_filters( 'do_rocket_critical_css_generation', true ) && current_user_can( 'rocket_regenerate_critical_css' ) ) : // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound ?>
+					<?php if ( 'local' !== wp_get_environment_type() && get_rocket_option( 'async_css' ) && apply_filters( 'do_rocket_critical_css_generation', true ) && current_user_can( 'rocket_regenerate_critical_css' ) ) : // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound ?>
 					<div class="wpr-field">
 						<h4 class="wpr-title3"><?php esc_html_e( 'Regenerate Critical CSS', 'rocket' ); ?></h4>
 						<?php
@@ -188,23 +193,14 @@ defined( 'ABSPATH' ) || exit;
 					</div>
 					<?php endif; ?>
 
-					<?php if ( get_rocket_option( 'remove_unused_css' ) && current_user_can( 'rocket_remove_unused_css' ) ) : ?>
-						<div class="wpr-field">
-							<h4 class="wpr-title3"><?php esc_html_e( 'Remove Used CSS Cache', 'rocket' ); ?></h4>
-							<?php
-							$this->render_action_button(
-									'link',
-									'rocket_clear_usedcss',
-									[
-										'label'      => __( 'Clear Used CSS', 'rocket' ),
-										'attributes' => [
-											'class' => 'wpr-button wpr-button--icon wpr-button--small wpr-icon-trash',
-										],
-									]
-							);
-							?>
-						</div>
-					<?php endif; ?>
+					<?php
+					/**
+					 * Fires in the dasbhoard actions column
+					 *
+					 * @since 3.16
+					 */
+					do_action( 'rocket_dashboard_actions' );
+					?>
 				</fieldset>
 			</div>
 		</div>

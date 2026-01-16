@@ -11,7 +11,7 @@ use DeliciousBrains\WPMDB\Common\Settings\Settings;
 use DeliciousBrains\WPMDB\Common\Sql\Table;
 use DeliciousBrains\WPMDB\Common\UI\Notice;
 use DeliciousBrains\WPMDB\Common\Util\Util;
-use DeliciousBrains\WPMDB\Pro\Addon\Addon;
+use DeliciousBrains\WPMDB\Common\Addon\Addon;
 use DeliciousBrains\WPMDB\Pro\Api;
 use DeliciousBrains\WPMDB\Pro\Beta\BetaManager;
 use DeliciousBrains\WPMDB\Pro\License;
@@ -70,15 +70,7 @@ class Template extends \DeliciousBrains\WPMDB\Common\UI\TemplateBase
         $this->dynamic_props  = DynamicProperties::getInstance();
         $this->addon          = $addon;
         $this->plugin_manager = $plugin_manager;
-
-        // Insert backups tab into plugin_tabs array
-        array_splice($this->plugin_tabs, 1, 0, [
-            [
-                'slug'  => 'backups',
-                'title' => _x('Backups', 'Get backups', 'wp-migrate-db'),
-            ],
-        ]);
-    }
+	}
 
     public function register()
     {

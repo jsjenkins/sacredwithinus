@@ -8,7 +8,7 @@
 <body>
 <?php 
 ob_start();
-phpinfo(INFO_ALL); 
+if (wfUtils::funcEnabled('phpinfo')) { phpinfo(INFO_ALL); } else { echo '<center><strong>' . esc_html__('Unable to output phpinfo content because it is disabled', 'wordfence') . "</strong></center>\n"; }
 $out = ob_get_clean();
 $out = str_replace('width="600"','width="900"', $out);
 // $out = preg_replace('/<hr.*?PHP Credits.*?<\/h1>/s', '', $out);
@@ -17,6 +17,6 @@ $out = preg_replace('/<\/a>/', '', $out);
 $out = preg_replace('/<title>[^<]*<\/title>/','', $out);
 echo $out;
 ?>
-<div class="diffFooter"><?php echo wp_kses(sprintf(__('&copy;&nbsp;%d to %d Wordfence &mdash; Visit <a href="http://wordfence.com/">Wordfence.com</a> for help, security updates and more.', 'wordfence'), date_i18n('Y', WORDFENCE_EPOCH), date_i18n('Y')), array('a'=>array('href'=>array()))) ?></div>
+<div class="diffFooter"><?php echo wp_kses(sprintf(__('&copy;&nbsp;%d to %d Wordfence &mdash; Visit <a href="https://www.wordfence.com/">Wordfence.com</a> for help, security updates and more.', 'wordfence'), date_i18n('Y', WORDFENCE_EPOCH), date_i18n('Y')), array('a'=>array('href'=>array()))) ?></div>
 </body>
 </html>

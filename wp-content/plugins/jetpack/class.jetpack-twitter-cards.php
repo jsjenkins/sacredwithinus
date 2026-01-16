@@ -5,6 +5,10 @@
  * @package automattic/jetpack
  */
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit( 0 );
+}
+
 /**
  * Twitter Cards
  *
@@ -69,7 +73,7 @@ class Jetpack_Twitter_Cards {
 			/**
 			 * Filter the default Twitter card image, used when no image can be found in a post.
 			 *
-			 * @module sharedaddy, publicize
+			 * @module sharedaddy
 			 *
 			 * @since 5.9.0
 			 *
@@ -107,7 +111,7 @@ class Jetpack_Twitter_Cards {
 			if ( ! empty( $post_image ) && is_array( $post_image ) ) {
 				// 4096 is the maximum size for an image per https://developer.twitter.com/en/docs/tweets/optimize-with-cards/overview/summary .
 				if (
-					isset( $post_image['src_width'], $post_image['src_height'] )
+					isset( $post_image['src_width'] ) && isset( $post_image['src_height'] )
 					&& (int) $post_image['src_width'] <= 4096
 					&& (int) $post_image['src_height'] <= 4096
 				) {
@@ -134,12 +138,8 @@ class Jetpack_Twitter_Cards {
 
 		// Only proceed with media analysis if a featured image has not superseded it already.
 		if ( empty( $og_tags['twitter:image'] ) && empty( $og_tags['twitter:image:src'] ) ) {
-			if ( ! class_exists( 'Jetpack_Media_Summary' ) && defined( 'IS_WPCOM' ) && IS_WPCOM ) {
-				include WP_CONTENT_DIR . '/lib/class.wpcom-media-summary.php';
-			}
-
 			if ( ! class_exists( 'Jetpack_Media_Summary' ) ) {
-				jetpack_require_lib( 'class.media-summary' );
+				require_once JETPACK__PLUGIN_DIR . '_inc/lib/class.media-summary.php';
 			}
 
 			// Test again, class should already be auto-loaded in Jetpack.
@@ -255,7 +255,7 @@ class Jetpack_Twitter_Cards {
 
 			// Not falling back on Gravatar, because there's no way to know if we end up with an auto-generated one.
 
-		} elseif ( $img_count && ( 'image' === $extract['type'] || 'gallery' === $extract['type'] ) ) {
+		} elseif ( 'image' === $extract['type'] || 'gallery' === $extract['type'] ) {
 			// Test for $extract['type'] to limit to image and gallery, so we don't send a potential fallback image like a Gravatar as a photo post.
 			$card_type                = 'summary_large_image';
 			$og_tags['twitter:image'] = esc_url( add_query_arg( 'w', 1400, ( empty( $extract['images'] ) ) ? $extract['image'] : $extract['images'][0]['url'] ) );
@@ -272,7 +272,7 @@ class Jetpack_Twitter_Cards {
 	 * @return string Result of the OG tag.
 	 */
 	public static function twitter_cards_output( $og_tag ) {
-		return ( false !== strpos( $og_tag, 'twitter:' ) ) ? preg_replace( '/property="([^"]+)"/', 'name="\1"', $og_tag ) : $og_tag;
+		return ( str_contains( $og_tag, 'twitter:' ) ) ? preg_replace( '/property="([^"]+)"/', 'name="\1"', $og_tag ) : $og_tag;
 	}
 
 	/**
@@ -330,8 +330,8 @@ class Jetpack_Twitter_Cards {
 	 * Validate the settings submission.
 	 */
 	public static function settings_validate() {
-		if ( wp_verify_nonce( $_POST['jetpack_twitter_cards_nonce'], 'jetpack-twitter-cards-settings' ) ) {
-			update_option( 'jetpack-twitter-cards-site-tag', trim( ltrim( wp_strip_all_tags( $_POST['jetpack-twitter-cards-site-tag'] ), '@' ) ) );
+		if ( isset( $_POST['jetpack_twitter_cards_nonce'] ) && wp_verify_nonce( $_POST['jetpack_twitter_cards_nonce'], 'jetpack-twitter-cards-settings' ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			update_option( 'jetpack-twitter-cards-site-tag', isset( $_POST['jetpack-twitter-cards-site-tag'] ) ? trim( ltrim( wp_strip_all_tags( filter_var( wp_unslash( $_POST['jetpack-twitter-cards-site-tag'] ) ) ), '@' ) ) : '' );
 		}
 	}
 

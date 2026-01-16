@@ -1,17 +1,53 @@
-<?php
-
-include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-include_once ABSPATH . 'wp-admin/includes/file.php';
+<?php // phpcs:ignore WordPress.Files.FileName.InvalidClassFileName
 
 use Automattic\Jetpack\Automatic_Install_Skin;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit( 0 );
+}
+
+require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+require_once ABSPATH . 'wp-admin/includes/file.php';
+
+/**
+ * Themes new endpoint class.
+ *
+ * /sites/%s/themes/%s/install
+ *
+ * @phan-constructor-used-for-side-effects
+ */
 class Jetpack_JSON_API_Themes_New_Endpoint extends Jetpack_JSON_API_Themes_Endpoint {
 
-	// POST  /sites/%s/themes/%s/install
+	/**
+	 * Needed capabilities.
+	 *
+	 * @var string
+	 */
 	protected $needed_capabilities = 'install_themes';
-	protected $action              = 'install';
-	protected $download_links      = array();
 
+	/**
+	 * Action.
+	 *
+	 * @var string
+	 */
+	protected $action = 'install';
+
+	/**
+	 * Download links.
+	 *
+	 * @var array
+	 */
+	protected $download_links = array();
+
+	/**
+	 * Validate the call.
+	 *
+	 * @param int    $_blog_id - the blod ID.
+	 * @param string $capability - the capability we're checking.
+	 * @param bool   $check_manage_active - if managing capabilities is active.
+	 *
+	 * @return bool|WP_Error
+	 */
 	protected function validate_call( $_blog_id, $capability, $check_manage_active = true ) {
 		$validate = parent::validate_call( $_blog_id, $capability, $check_manage_active );
 		if ( is_wp_error( $validate ) ) {
@@ -25,17 +61,27 @@ class Jetpack_JSON_API_Themes_New_Endpoint extends Jetpack_JSON_API_Themes_Endpo
 		return $validate;
 	}
 
-	protected function validate_input( $theme ) {
-		$this->bulk    = false;
+	/**
+	 * Validate the input.
+	 *
+	 * @param string $theme - the theme.
+	 */
+	protected function validate_input( $theme ) { // phpcs:ignore VariableAnalysis.CodeAnalysis.VariableAnalysis.UnusedVariable
+		$this->bulk   = false;
 		$this->themes = array();
 	}
 
-	function install() {
+	/**
+	 * Install the theme.
+	 *
+	 * @return bool
+	 */
+	public function install() {
 		$args = $this->input();
 
 		if ( isset( $args['zip'][0]['id'] ) ) {
 			$attachment_id = $args['zip'][0]['id'];
-			$local_file           = get_attached_file( $attachment_id );
+			$local_file    = get_attached_file( $attachment_id );
 			if ( ! $local_file ) {
 				return new WP_Error( 'local-file-does-not-exist' );
 			}
@@ -56,8 +102,8 @@ class Jetpack_JSON_API_Themes_New_Endpoint extends Jetpack_JSON_API_Themes_Endpo
 			$plugin             = array_values( array_diff( array_keys( $after_install_list ), array_keys( $pre_install_list ) ) );
 
 			if ( ! $result ) {
-				$error_code = $upgrader->skin->get_main_error_code();
-				$message    = $upgrader->skin->get_main_error_message();
+				$error_code = $skin->get_main_error_code();
+				$message    = $skin->get_main_error_message();
 				if ( empty( $message ) ) {
 					$message = __( 'An unknown error occurred during installation', 'jetpack' );
 				}

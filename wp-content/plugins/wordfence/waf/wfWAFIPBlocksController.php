@@ -1,26 +1,12 @@
 <?php
 if (!defined('WFWAF_RUN_COMPLETE')) {
 
-class wfWAFIPBlocksController
+require_once __DIR__ . '/../vendor/wordfence/wf-waf/src/lib/shutdown.php';
+require_once __DIR__ . '/wfWAFBlockI18n.php';
+require_once __DIR__ . '/wfWAFBlockConstants.php';
+
+class wfWAFIPBlocksController implements wfWAFBlockConstants /* wfWAFBlockConstants is used here for backwards compatibility, wfWAFBlockI18n should be considered the canonical owner of them */
 {
-	const WFWAF_BLOCK_UAREFIPRANGE = 'UA/Referrer/IP Range not allowed';
-	const WFWAF_BLOCK_COUNTRY = 'blocked access via country blocking';
-	const WFWAF_BLOCK_COUNTRY_REDIR = 'blocked access via country blocking and redirected to URL';
-	const WFWAF_BLOCK_COUNTRY_BYPASS_REDIR = 'redirected to bypass URL';
-	const WFWAF_BLOCK_WFSN = 'Blocked by Wordfence Security Network';
-	const WFWAF_BLOCK_BADPOST = 'POST received with blank user-agent and referer';
-	const WFWAF_BLOCK_BANNEDURL = 'Accessed a banned URL.';
-	const WFWAF_BLOCK_FAKEGOOGLE = 'Fake Google crawler automatically blocked';
-	const WFWAF_BLOCK_LOGINSEC = 'Blocked by login security setting.';
-	const WFWAF_BLOCK_LOGINSEC_FORGOTPASSWD = 'Exceeded the maximum number of tries to recover their password'; //substring search
-	const WFWAF_BLOCK_LOGINSEC_FAILURES = 'Exceeded the maximum number of login failures'; //substring search
-	const WFWAF_BLOCK_THROTTLEGLOBAL = 'Exceeded the maximum global requests per minute for crawlers or humans.';
-	const WFWAF_BLOCK_THROTTLESCAN = 'Exceeded the maximum number of 404 requests per minute for a known security vulnerability.';
-	const WFWAF_BLOCK_THROTTLECRAWLER = 'Exceeded the maximum number of requests per minute for crawlers.';
-	const WFWAF_BLOCK_THROTTLECRAWLERNOTFOUND = 'Exceeded the maximum number of page not found errors per minute for a crawler.';
-	const WFWAF_BLOCK_THROTTLEHUMAN = 'Exceeded the maximum number of page requests per minute for humans.';
-	const WFWAF_BLOCK_THROTTLEHUMANNOTFOUND = 'Exceeded the maximum number of page not found errors per minute for humans.';
-	
 	protected static $_currentController = null;
 
 	public static function currentController() {
@@ -41,7 +27,7 @@ class wfWAFIPBlocksController
 		static $willSynchronize = false;
 		if (!$willSynchronize) {
 			$willSynchronize = true;
-			register_shutdown_function('wfWAFIPBlocksController::synchronizeConfigSettings');
+			wfShutdownRegistry::getDefaultInstance()->register('wfWAFIPBlocksController::synchronizeConfigSettings');
 		}
 	}
 	
@@ -56,6 +42,9 @@ class wfWAFIPBlocksController
 		}
 		$isSynchronizing = true;
 		
+		global $wpdb;
+		$suppressed = $wpdb->suppress_errors(!(defined('WFWAF_DEBUG') && WFWAF_DEBUG));
+		
 		// Pattern Blocks
 		$blocks = wfBlock::patternBlocks(true);
 		$patternBlocks = array();
@@ -68,7 +57,7 @@ class wfWAFIPBlocksController
 		$countryBlockEntries = wfBlock::countryBlocks(true);
 		$countryBlocks['blocks'] = array();
 		foreach ($countryBlockEntries as $b) {
-			$reason = __('Access from your area has been temporarily limited for security reasons', 'wordfence');
+			$reason = wfI18n::__('Access from your area has been temporarily limited for security reasons', 'wordfence');
 			
 			$countryBlocks['blocks'][] = array(
 				'id' => $b->id,
@@ -94,7 +83,7 @@ class wfWAFIPBlocksController
 		foreach ($otherBlockEntries as $b) {
 			$reason = $b->reason;
 			if ($b->type == wfBlock::TYPE_IP_MANUAL || $b->type == wfBlock::TYPE_IP_AUTOMATIC_PERMANENT) {
-				$reason = __('Manual block by administrator', 'wordfence');
+				$reason = wfI18n::__('Manual block by administrator', 'wordfence');
 			}
 			
 			$otherBlocks['blocks'][] = array(
@@ -136,6 +125,8 @@ class wfWAFIPBlocksController
 			// Do nothing
 		}
 		$isSynchronizing = false;
+		
+		$wpdb->suppress_errors($suppressed);
 	}
 	
 	/**
@@ -237,7 +228,7 @@ class wfWAFIPBlocksController
 				}
 				
 				if ($foundBits === $expectedBits && $expectedBits > 0) {
-					return array('action' => self::WFWAF_BLOCK_UAREFIPRANGE, 'id' => $b['id']);
+					return array('action' => wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_UAREFIPRANGE), 'id' => $b['id']);
 				}
 			}
 		}
@@ -257,7 +248,7 @@ class wfWAFIPBlocksController
 					if ($bareBypassRedirURI && $bareRequestURI == $bareBypassRedirURI) { // Run this before country blocking because even if the user isn't blocked we need to set the bypass cookie so they can bypass future blocks.
 						if ($countryBlocks['bypassRedirDest']) {
 							setcookie('wfCBLBypass', $countryBlocks['cookieVal'], time() + (86400 * 365), '/', null, $this->isFullSSL(), true);
-							return array('action' => self::WFWAF_BLOCK_COUNTRY_BYPASS_REDIR, 'id' => $b['id']);
+							return array('action' => wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_COUNTRY_BYPASS_REDIR), 'id' => $b['id']);
 						}
 					}
 					
@@ -322,7 +313,7 @@ class wfWAFIPBlocksController
 				}
 				
 				if ($isAuthRequest && isset($b['wfsn']) && $b['wfsn']) {
-					return array('action' => self::WFWAF_BLOCK_WFSN, 'id' => $b['id']);
+					return array('action' => wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_WFSN), 'id' => $b['id']);
 				}
 				
 				return array('action' => (empty($b['reason']) ? '' : $b['reason']), 'id' => $b['id'], 'block' => true);
@@ -416,11 +407,11 @@ class wfWAFIPBlocksController
 								//Do nothing
 							}
 							else {
-								return array('action' => self::WFWAF_BLOCK_COUNTRY_REDIR);
+								return array('action' => wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_COUNTRY_REDIR, $redirURL));
 							}
 						}
 						else {
-							return array('action' => self::WFWAF_BLOCK_COUNTRY);
+							return array('action' => wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_COUNTRY));
 						}
 					}
 				}
@@ -478,22 +469,13 @@ class wfWAFIPBlocksController
 	}
 	
 	protected function ip2Country($ip) {
-		if (version_compare(phpversion(), '5.4.0', '<')) {
-			return '';
-		}
-		
-		require_once(dirname(__FILE__) . '/wfWAFGeoIP2.php');
-		
-		try {
-			$geoip = @wfWAFGeoIP2::shared();
-			$code = @$geoip->countryCode($ip);
-			return is_string($code) ? $code : '';
-		}
-		catch (Exception $e) {
-			//Ignore
-		}
-		
-		return '';
+		/**
+		 * It's possible this class is already loaded from a different installation of the plugin
+		 * by the time this is reached. See wfUtils::requireIpLocator for additional details.
+		 */
+		if (!class_exists('wfIpLocator'))
+			require_once __DIR__ . '/../lib/wfIpLocator.php';
+		return wfIpLocator::getInstance()->getCountryCode($ip);
 	}
 	
 	/**
@@ -525,5 +507,6 @@ class wfWAFIPBlocksController
 		
 		return false;
 	}
+	
 }
 }

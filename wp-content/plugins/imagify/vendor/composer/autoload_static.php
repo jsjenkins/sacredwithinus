@@ -7,10 +7,18 @@ namespace Composer\Autoload;
 use Composer\AutoloadWPMediaImagifyWordPressPlugin\ClassLoader as ClassLoaderWPMediaImagifyWordPressPlugin;
 
 
-class ComposerStaticInit27c2f21fb0be1f8c2ef63f80977ab942
+class ComposerStaticInit0904377d4ce7befc7e9814f085804f15
 {
+    public static $files = array (
+        '6c592737b91137905268e9a0eb968869' => __DIR__ . '/..' . '/wp-media/apply-filters-typed/functions.php',
+    );
+
     public static $prefixLengthsPsr4 = array (
-        'I' => 
+        'W' =>
+        array (
+            'WPMedia\\PluginFamily\\' => 21,
+        ),
+        'I' =>
         array (
             'Imagify\\ThirdParty\\WPRocket\\' => 28,
             'Imagify\\ThirdParty\\RegenerateThumbnails\\' => 40,
@@ -18,69 +26,72 @@ class ComposerStaticInit27c2f21fb0be1f8c2ef63f80977ab942
             'Imagify\\ThirdParty\\FormidablePro\\' => 33,
             'Imagify\\ThirdParty\\EnableMediaReplace\\' => 38,
             'Imagify\\ThirdParty\\AS3CF\\' => 25,
-            'Imagify\\Tests\\' => 14,
             'Imagify\\Deprecated\\Traits\\' => 26,
             'Imagify\\' => 8,
         ),
-        'D' => 
+        'D' =>
         array (
             'Dangoodman\\ComposerForWordpress\\' => 32,
         ),
-        'C' => 
+        'C' =>
         array (
             'Composer\\Installers\\' => 20,
         ),
     );
 
     public static $prefixDirsPsr4 = array (
-        'Imagify\\ThirdParty\\WPRocket\\' => 
+        'WPMedia\\PluginFamily\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/wp-media/plugin-family/src',
+        ),
+        'Imagify\\ThirdParty\\WPRocket\\' =>
         array (
             0 => __DIR__ . '/../..' . '/inc/3rd-party/wp-rocket/classes',
         ),
-        'Imagify\\ThirdParty\\RegenerateThumbnails\\' => 
+        'Imagify\\ThirdParty\\RegenerateThumbnails\\' =>
         array (
             0 => __DIR__ . '/../..' . '/inc/3rd-party/regenerate-thumbnails/classes',
         ),
-        'Imagify\\ThirdParty\\NGG\\' => 
+        'Imagify\\ThirdParty\\NGG\\' =>
         array (
             0 => __DIR__ . '/../..' . '/inc/3rd-party/nextgen-gallery/classes',
         ),
-        'Imagify\\ThirdParty\\FormidablePro\\' => 
+        'Imagify\\ThirdParty\\FormidablePro\\' =>
         array (
             0 => __DIR__ . '/../..' . '/inc/3rd-party/formidable-pro/classes',
         ),
-        'Imagify\\ThirdParty\\EnableMediaReplace\\' => 
+        'Imagify\\ThirdParty\\EnableMediaReplace\\' =>
         array (
             0 => __DIR__ . '/../..' . '/inc/3rd-party/enable-media-replace/classes',
         ),
-        'Imagify\\ThirdParty\\AS3CF\\' => 
+        'Imagify\\ThirdParty\\AS3CF\\' =>
         array (
             0 => __DIR__ . '/../..' . '/inc/3rd-party/amazon-s3-and-cloudfront/classes',
         ),
-        'Imagify\\Tests\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/Tests',
-        ),
-        'Imagify\\Deprecated\\Traits\\' => 
+        'Imagify\\Deprecated\\Traits\\' =>
         array (
             0 => __DIR__ . '/../..' . '/inc/deprecated/Traits',
         ),
-        'Imagify\\' => 
+        'Imagify\\' =>
         array (
             0 => __DIR__ . '/../..' . '/classes',
         ),
-        'Dangoodman\\ComposerForWordpress\\' => 
+        'Dangoodman\\ComposerForWordpress\\' =>
         array (
             0 => __DIR__ . '/..' . '/dangoodman/composer-for-wordpress',
         ),
-        'Composer\\Installers\\' => 
+        'Composer\\Installers\\' =>
         array (
             0 => __DIR__ . '/..' . '/composer/installers/src/Composer/Installers',
         ),
     );
 
     public static $classMap = array (
+        'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'Imagify' => __DIR__ . '/../..' . '/inc/classes/class-imagify.php',
+        'Imagify\\EventManagement\\EventManager' => __DIR__ . '/../..' . '/inc/classes/Dependencies/wp-media/event-manager/EventManager.php',
+        'Imagify\\EventManagement\\EventManagerAwareSubscriberInterface' => __DIR__ . '/../..' . '/inc/classes/Dependencies/wp-media/event-manager/EventManagerAwareSubscriberInterface.php',
+        'Imagify\\EventManagement\\SubscriberInterface' => __DIR__ . '/../..' . '/inc/classes/Dependencies/wp-media/event-manager/SubscriberInterface.php',
         'Imagify_AS3CF_Attachment' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-as3cf-attachment.php',
         'Imagify_AS3CF_Deprecated' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-as3cf-deprecated.php',
         'Imagify_Abstract_Attachment' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-abstract-attachment.php',
@@ -114,13 +125,12 @@ class ComposerStaticInit27c2f21fb0be1f8c2ef63f80977ab942
         'Imagify_Folders_DB' => __DIR__ . '/../..' . '/inc/classes/class-imagify-folders-db.php',
         'Imagify_NGG_Attachment' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-ngg-attachment.php',
         'Imagify_NGG_Dynamic_Thumbnails_Background_Process' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-ngg-dynamic-thumbnails-background-process.php',
-        'Imagify_Notices' => __DIR__ . '/../..' . '/inc/classes/class-imagify-notices.php',
         'Imagify_Notices_Deprecated' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-notices-deprecated.php',
         'Imagify_Options' => __DIR__ . '/../..' . '/inc/classes/class-imagify-options.php',
         'Imagify_Regenerate_Thumbnails_Deprecated' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-regenerate-thumbnails-deprecated.php',
         'Imagify_Requirements' => __DIR__ . '/../..' . '/inc/classes/class-imagify-requirements.php',
         'Imagify_Settings' => __DIR__ . '/../..' . '/inc/classes/class-imagify-settings.php',
-        'Imagify_User' => __DIR__ . '/../..' . '/inc/classes/class-imagify-user.php',
+        'Imagify_User' => __DIR__ . '/../..' . '/inc/deprecated/classes/class-imagify-user.php',
         'Imagify_Views' => __DIR__ . '/../..' . '/inc/classes/class-imagify-views.php',
         'Imagify_WP_Async_Request' => __DIR__ . '/../..' . '/inc/classes/Dependencies/deliciousbrains/wp-background-processing/classes/wp-async-request.php',
         'Imagify_WP_Background_Process' => __DIR__ . '/../..' . '/inc/classes/Dependencies/deliciousbrains/wp-background-processing/classes/wp-background-process.php',
@@ -129,9 +139,9 @@ class ComposerStaticInit27c2f21fb0be1f8c2ef63f80977ab942
     public static function getInitializer(ClassLoaderWPMediaImagifyWordPressPlugin $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit27c2f21fb0be1f8c2ef63f80977ab942::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit27c2f21fb0be1f8c2ef63f80977ab942::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit27c2f21fb0be1f8c2ef63f80977ab942::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit0904377d4ce7befc7e9814f085804f15::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit0904377d4ce7befc7e9814f085804f15::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit0904377d4ce7befc7e9814f085804f15::$classMap;
 
         }, null, ClassLoaderWPMediaImagifyWordPressPlugin::class);
     }

@@ -1,28 +1,24 @@
 <?php
+declare(strict_types=1);
+
 namespace WP_Rocket\Engine\Optimization;
 
+use WP_Rocket\Dependencies\League\Container\Argument\Literal\StringArgument;
 use WP_Rocket\Dependencies\League\Container\ServiceProvider\AbstractServiceProvider;
+use WP_Rocket\Engine\Optimization\Buffer\Optimization;
+use WP_Rocket\Engine\Optimization\Buffer\Subscriber as BufferSubscriber;
+use WP_Rocket\Engine\Optimization\GoogleFonts\{Combine, CombineV2, Subscriber};
 
 /**
  * Service provider for the WP Rocket optimizations
- *
- * @since  3.3
- * @since  3.6 Renamed and moved into this module.
  */
 class ServiceProvider extends AbstractServiceProvider {
-
 	/**
-	 * The provides array is a way to let the container
-	 * know that a service is provided by this service
-	 * provider. Every service that is registered via
-	 * this service provider must have an alias added
-	 * to this array or it will be ignored.
+	 * Array of services provided by this service provider
 	 *
 	 * @var array
 	 */
 	protected $provides = [
-		'config',
-		'tests',
 		'buffer_optimization',
 		'buffer_subscriber',
 		'cache_dynamic_resource',
@@ -35,44 +31,60 @@ class ServiceProvider extends AbstractServiceProvider {
 	];
 
 	/**
+	 * Check if the service provider provides a specific service.
+	 *
+	 * @param string $id The id of the service.
+	 *
+	 * @return bool
+	 */
+	public function provides( string $id ): bool {
+		return in_array( $id, $this->provides, true );
+	}
+
+	/**
 	 * Registers items with the container
 	 *
 	 * @return void
 	 */
-	public function register() {
-		$options    = $this->getContainer()->get( 'options' );
+	public function register(): void {
 		$filesystem = rocket_direct_filesystem();
 
-		$this->getContainer()->add( 'config', 'WP_Rocket\Buffer\Config' )
-			->addArgument( [ 'config_dir_path' => rocket_get_constant( 'WP_ROCKET_CONFIG_PATH' ) ] );
-		$this->getContainer()->add( 'tests', 'WP_Rocket\Buffer\Tests' )
-			->addArgument( $this->getContainer()->get( 'config' ) );
-		$this->getContainer()->add( 'buffer_optimization', 'WP_Rocket\Buffer\Optimization' )
-			->addArgument( $this->getContainer()->get( 'tests' ) );
-		$this->getContainer()->share( 'buffer_subscriber', 'WP_Rocket\Subscriber\Optimization\Buffer_Subscriber' )
-			->addArgument( $this->getContainer()->get( 'buffer_optimization' ) )
-			->addTag( 'front_subscriber' );
-		$this->getContainer()->share( 'cache_dynamic_resource', 'WP_Rocket\Engine\Optimization\CacheDynamicResource' )
-			->addArgument( $options )
-			->addArgument( WP_ROCKET_CACHE_BUSTING_PATH )
-			->addArgument( WP_ROCKET_CACHE_BUSTING_URL )
-			->addTag( 'front_subscriber' );
-		$this->getContainer()->add( 'optimize_google_fonts', 'WP_Rocket\Engine\Optimization\GoogleFonts\Combine' );
-		$this->getContainer()->add( 'optimize_google_fonts_v2', 'WP_Rocket\Engine\Optimization\GoogleFonts\CombineV2' );
-		$this->getContainer()->share( 'combine_google_fonts_subscriber', 'WP_Rocket\Engine\Optimization\GoogleFonts\Subscriber' )
-			->addArgument( $this->getContainer()->get( 'optimize_google_fonts' ) )
-			->addArgument( $this->getContainer()->get( 'optimize_google_fonts_v2' ) )
-			->addArgument( $options )
-			->addTag( 'front_subscriber' );
-		$this->getContainer()->share( 'minify_css_subscriber', 'WP_Rocket\Engine\Optimization\Minify\CSS\Subscriber' )
-			->addArgument( $options )
-			->addArgument( $filesystem )
-			->addTag( 'front_subscriber' );
-		$this->getContainer()->share( 'minify_js_subscriber', 'WP_Rocket\Engine\Optimization\Minify\JS\Subscriber' )
-			->addArgument( $options )
-			->addArgument( $filesystem )
-			->addTag( 'front_subscriber' );
-		$this->getContainer()->share( 'ie_conditionals_subscriber', 'WP_Rocket\Engine\Optimization\IEConditionalSubscriber' )
-			->addTag( 'front_subscriber' );
+		$this->getContainer()->add( 'buffer_optimization', Optimization::class )
+			->addArgument( 'tests' );
+		$this->getContainer()->addShared( 'buffer_subscriber', BufferSubscriber::class )
+			->addArgument( 'buffer_optimization' );
+		$this->getContainer()->addShared( 'cache_dynamic_resource', CacheDynamicResource::class )
+			->addArguments(
+				[
+					'options',
+					new StringArgument( rocket_get_constant( 'WP_ROCKET_CACHE_BUSTING_PATH', '' ) ),
+					new StringArgument( rocket_get_constant( 'WP_ROCKET_CACHE_BUSTING_URL', '' ) ),
+				]
+			);
+		$this->getContainer()->add( 'optimize_google_fonts', Combine::class );
+		$this->getContainer()->add( 'optimize_google_fonts_v2', CombineV2::class );
+		$this->getContainer()->addShared( 'combine_google_fonts_subscriber', Subscriber::class )
+			->addArguments(
+				[
+					'optimize_google_fonts',
+					'optimize_google_fonts_v2',
+					'options',
+				]
+				);
+		$this->getContainer()->addShared( 'minify_css_subscriber', Minify\CSS\Subscriber::class )
+			->addArguments(
+				[
+					'options',
+					$filesystem,
+				]
+			);
+		$this->getContainer()->addShared( 'minify_js_subscriber', Minify\JS\Subscriber::class )
+			->addArguments(
+				[
+					'options',
+					$filesystem,
+				]
+			);
+		$this->getContainer()->addShared( 'ie_conditionals_subscriber', IEConditionalSubscriber::class );
 	}
 }

@@ -7,6 +7,7 @@ use WP_Rocket\Admin\Options_Data;
 use WP_Rocket\Event_Management\Subscriber_Interface;
 
 class Subscriber implements Subscriber_Interface {
+
 	/**
 	 * Options Data instance
 	 *
@@ -58,6 +59,15 @@ class Subscriber implements Subscriber_Interface {
 	 * @return void
 	 */
 	public function add_preload_script() {
+
+		/**
+		 * Bail out if user is logged in
+		 * Don't add preload link script
+		 */
+		if ( is_user_logged_in() ) {
+			return;
+		}
+
 		if ( $this->is_enqueued ) {
 			return;
 		}
@@ -76,7 +86,7 @@ class Subscriber implements Subscriber_Interface {
 				'rocket-browser-checker',
 				'',
 				[],
-				'',
+				rocket_get_constant( WP_ROCKET_VERSION, '' ),
 				true
 			);
 			wp_enqueue_script( 'rocket-browser-checker' );
@@ -96,7 +106,7 @@ class Subscriber implements Subscriber_Interface {
 			[
 				'rocket-browser-checker',
 			],
-			'',
+			rocket_get_constant( WP_ROCKET_VERSION, '' ),
 			true
 		);
 		wp_enqueue_script( 'rocket-preload-links' );
@@ -118,17 +128,17 @@ class Subscriber implements Subscriber_Interface {
 	 *
 	 * @since 3.7
 	 *
-	 * @return string[] Preload Links script configuration parameters.
+	 * @return array Preload Links script configuration parameters.
 	 */
 	private function get_preload_links_config() {
 		$use_trailing_slash = $this->use_trailing_slash();
-		$images_ext         = 'jpg|jpeg|gif|png|tiff|bmp|webp|avif';
+		$images_ext         = 'jpg|jpeg|gif|png|tiff|bmp|webp|avif|pdf|doc|docx|xls|xlsx|php';
 
 		$config = [
 			'excludeUris'       => $this->get_uris_to_exclude( $use_trailing_slash ),
 			'usesTrailingSlash' => $use_trailing_slash,
 			'imageExt'          => $images_ext,
-			'fileExt'           => $images_ext . '|php|pdf|html|htm',
+			'fileExt'           => $images_ext . '|html|htm',
 			'siteUrl'           => home_url(),
 			'onHoverDelay'      => 100, // milliseconds. -1 disables the "on hover" feature.
 			'rateThrottle'      => 3, // on hover: limits the number of links preloaded per second.
@@ -142,13 +152,9 @@ class Subscriber implements Subscriber_Interface {
 		 *
 		 * @since 3.7
 		 *
-		 * @param string[] $config Preload Links script configuration parameters.
+		 * @param array $config Preload Links script configuration parameters.
 		 */
-		$filtered_config = apply_filters( 'rocket_preload_links_config', $config );
-
-		if ( ! is_array( $filtered_config ) ) {
-			return $config;
-		}
+		$filtered_config = wpm_apply_filters_typed( 'array', 'rocket_preload_links_config', $config );
 
 		return array_merge( $config, $filtered_config );
 	}
@@ -164,22 +170,8 @@ class Subscriber implements Subscriber_Interface {
 	 */
 	private function get_uris_to_exclude( $use_trailing_slash ) {
 		$site_url = site_url();
-		$uris     = get_rocket_cache_reject_uri();
+		$uris     = get_rocket_cache_reject_uri( false, false );
 		$uris     = str_replace( [ '/(.*)|', '/(.*)/|' ], '/|', $uris );
-
-		foreach ( [ '/wp-admin', '/logout' ] as $uri ) {
-			$uris .= "|{$uri}";
-			if ( $use_trailing_slash ) {
-				$uris .= '/';
-			}
-		}
-
-		foreach ( [ wp_logout_url(), wp_login_url() ] as $uri ) {
-			if ( strpos( $uri, '?' ) !== false ) {
-				continue;
-			}
-			$uris .= '|' . str_replace( $site_url, '', $uri );
-		}
 
 		$default = [
 			'/refer/',
@@ -198,13 +190,20 @@ class Subscriber implements Subscriber_Interface {
 		 * @param string[] $excluded Array of excluded patterns.
 		 * @param string[] $default  Array of default excluded patterns.
 		 */
-		$excluded = apply_filters( 'rocket_preload_links_exclusions', $excluded, $default );
+		$excluded = wpm_apply_filters_typed( 'array', 'rocket_preload_links_exclusions', $excluded, $default );
 
-		if ( ! is_array( $excluded ) ) {
-			$excluded = (array) $excluded;
-		}
+		$excluded = array_filter( $excluded );
 
-		$excluded          = array_filter( $excluded );
+		$login_url = wp_login_url(); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		$login_uri = str_replace( home_url(), '', $login_url );
+
+		$excluded = array_filter(
+			$excluded,
+			function ( $uri ) use ( $login_uri ) {
+				return ! str_contains( $login_uri, $uri );
+			}
+		);
+
 		$excluded_patterns = '';
 
 		if ( ! empty( $excluded ) ) {

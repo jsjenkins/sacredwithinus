@@ -56,7 +56,6 @@ class AdminPageSubscriber extends Abstract_Render implements Subscriber_Interfac
 	public static function get_subscribed_events() {
 		return [
 			'rocket_dashboard_after_account_data' => 'display_rocketcdn_status',
-			'rocket_after_cdn_sections'           => 'display_manage_subscription',
 			'rocket_cdn_settings_fields'          => 'rocketcdn_field',
 			'admin_post_rocket_purge_rocketcdn'   => 'purge_cdn_cache',
 			'rocket_settings_page_footer'         => 'add_subscription_modal',
@@ -72,24 +71,36 @@ class AdminPageSubscriber extends Abstract_Render implements Subscriber_Interfac
 	 * @return void
 	 */
 	public function display_rocketcdn_status() {
+		/**
+		 * Filters the display of the RocketCDN status.
+		 *
+		 * @param bool $display_rocketcdn_status; true to display, false otherwise.
+		 */
+		if ( ! apply_filters( 'rocket_display_rocketcdn_status', true ) ) {
+			return;
+		}
+
 		if ( $this->is_white_label_account() ) {
 			return;
 		}
 
 		$subscription_data = $this->api_client->get_subscription_data();
 
+		$container_class = '';
+		$status_class    = '';
+		$label           = '';
+		$status_text     = '';
+		$is_active       = false;
+
 		if ( 'running' === $subscription_data['subscription_status'] ) {
-			$label           = __( 'Next Billing Date', 'rocket' );
-			$status_class    = ' wpr-isValid';
-			$container_class = '';
-			$status_text     = date_i18n( get_option( 'date_format' ), strtotime( $subscription_data['subscription_next_date_update'] ) );
-			$is_active       = true;
+			$label        = __( 'Next Billing Date', 'rocket' );
+			$status_class = ' wpr-isValid';
+			$status_text  = date_i18n( get_option( 'date_format' ), strtotime( $subscription_data['subscription_next_date_update'] ) );
+			$is_active    = true;
 		} elseif ( 'cancelled' === $subscription_data['subscription_status'] ) {
-			$label           = '';
 			$status_class    = ' wpr-isInvalid';
 			$container_class = ' wpr-flex--egal';
 			$status_text     = __( 'No Subscription', 'rocket' );
-			$is_active       = false;
 		}
 
 		$data = [
@@ -164,35 +175,6 @@ class AdminPageSubscriber extends Abstract_Render implements Subscriber_Interfac
 	}
 
 	/**
-	 * Displays the button to open the subscription modal
-	 *
-	 * @since  3.5
-	 *
-	 * @return void
-	 */
-	public function display_manage_subscription() {
-		if ( $this->is_white_label_account() ) {
-			return;
-		}
-
-		if ( ! rocket_is_live_site() ) {
-			return;
-		}
-
-		$subscription_data = $this->api_client->get_subscription_data();
-
-		if ( 'running' !== $subscription_data['subscription_status'] ) {
-			return;
-		}
-
-		?>
-		<p class="wpr-rocketcdn-subscription">
-			<button class="wpr-rocketcdn-open" data-micromodal-trigger="wpr-rocketcdn-modal"><?php esc_html_e( 'Manage Subscription', 'rocket' ); ?></button>
-		</p>
-		<?php
-	}
-
-	/**
 	 * Purges the CDN cache and store the response in a transient.
 	 *
 	 * @since  3.5
@@ -234,15 +216,17 @@ class AdminPageSubscriber extends Abstract_Render implements Subscriber_Interfac
 			[
 				'website'  => home_url(),
 				'callback' => rest_url( 'wp-rocket/v1/rocketcdn/' ),
+				'source'   => 'plugin',
 			],
-			rocket_get_constant( 'WP_ROCKET_WEB_MAIN' ) . 'cdn/iframe'
+			'https://api.wp-rocket.me/cdn/iframe'
 		);
 		?>
 		<div class="wpr-rocketcdn-modal" id="wpr-rocketcdn-modal" aria-hidden="true">
 			<div class="wpr-rocketcdn-modal__overlay" tabindex="-1">
+				<div class="wpr-loader" id="wpr-rocketcdn-modal-loader"></div>
 				<div class="wpr-rocketcdn-modal__container" role="dialog" aria-modal="true" aria-labelledby="wpr-rocketcdn-modal-title">
 					<div id="wpr-rocketcdn-modal-content">
-						<iframe id="rocketcdn-iframe" src="<?php echo esc_url( $iframe_src ); ?>" width="674" height="425"></iframe>
+						<iframe id="rocketcdn-iframe" src="<?php echo esc_url( $iframe_src ); ?>" loading="lazy" width="674" height="425"></iframe>
 					</div>
 				</div>
 			</div>

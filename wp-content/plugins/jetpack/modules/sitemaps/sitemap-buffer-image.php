@@ -10,6 +10,10 @@
  * @package automattic/jetpack
  */
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit( 0 );
+}
+
 /**
  * A buffer for constructing sitemap image xml files.
  *
@@ -29,6 +33,10 @@ class Jetpack_Sitemap_Buffer_Image extends Jetpack_Sitemap_Buffer {
 
 		$this->doc->appendChild(
 			$this->doc->createComment( "generator='jetpack-" . JETPACK__VERSION . "'" )
+		);
+
+		$this->doc->appendChild(
+			$this->doc->createComment( 'Jetpack_Sitemap_Buffer_Image' )
 		);
 
 		$this->doc->appendChild(

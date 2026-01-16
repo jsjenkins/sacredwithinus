@@ -1,37 +1,65 @@
 <?php
-defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
+use Imagify\Bulk\Bulk;
+
+defined( 'ABSPATH' ) || exit;
 ?>
 
 <div class="imagify-bulk-table">
 	<div class="imagify-table-header imagify-flex imagify-vcenter imagify-resting">
 		<div class="imagify-th-titles imagify-flex imagify-vcenter">
-			<span class="dashicons dashicons-<?php echo $data['icon']; ?>"></span>
+			<span class="dashicons dashicons-<?php echo esc_attr( $data['icon'] ); ?>"></span>
 			<div class="imagify-th-titles">
-				<p class="imagify-th-title"><?php echo $data['title']; ?></p>
+				<p class="imagify-th-title"><?php echo esc_html( $data['title'] ); ?></p>
 			</div>
-		</div>
-
-		<div class="imagify-th-action">
-			<button class="button imagify-button-clean imagify-show-table-details" type="button" data-label-show="<?php esc_attr_e( 'View Details', 'imagify' ); ?>" data-label-hide="<?php esc_attr_e( 'Hide Details', 'imagify' ); ?>">
-				<?php esc_html_e( 'View Details', 'imagify' ); ?>
-				<span class="dashicons dashicons-menu"></span>
-			</button>
 		</div>
 	</div>
 
+	<?php
+	$types      = [];
+	$total      = 0;
+	$remaining  = 0;
+	$percentage = 0;
+
+	foreach ( $data['groups'] as $group ) {
+		$types[ $group['group_id'] . '|' . $group['context'] ] = true;
+
+		$transient = get_transient( "imagify_{$group['context']}_optimize_running" );
+
+		if ( false !== $transient ) {
+			$total     += $transient['total'];
+			$remaining += $transient['remaining'];
+		}
+	}
+
+	if ( 0 !== $total ) {
+		$percentage = ( $total - $remaining ) / $total * 100;
+	}
+
+	$bulk        = Bulk::get_instance();
+	$aria_hidden = 'aria-hidden="true"';
+	$hidden      = 'hidden';
+	$style       = '';
+	$display     = '';
+
+	if (
+		0 !== $percentage
+		&&
+		100 !== $percentage
+	) {
+		$percentage  = round( $percentage );
+		$aria_hidden = '';
+		$hidden      = '';
+		$style       = 'style="width:' . $percentage . '%;"';
+		$display     = 'style="display:block;"';
+	}
+	?>
+
 	<div class="imagify-bulk-table-content">
 		<div class="imagify-bulk-table-container">
-			<table class="imagify-bulk-table-details hidden" aria-hidden="true">
-				<thead>
-				</thead>
-				<tbody>
-				</tbody>
-			</table>
-
-			<div aria-hidden="true" class="imagify-row-progress hidden">
+			<div <?php echo $aria_hidden; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?> class="imagify-row-progress <?php echo esc_attr( $hidden ); ?>" <?php echo $display; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
 				<div class="media-item">
 					<div class="progress">
-						<div class="bar"><div class="percent">0%</div></div>
+						<div class="bar" <?php echo $style; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>><div class="percent"><?php echo esc_html( $percentage ); ?>%</div></div>
 					</div>
 				</div>
 			</div>
@@ -51,8 +79,29 @@ defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
 				<tbody>
 					<?php
 					foreach ( $data['groups'] as $group ) {
-						$context_data = Imagify_Admin_Ajax_Post::get_instance()->get_bulk_instance( $group['context'] )->get_context_data();
-						$group        = array_merge( $group, $context_data );
+						$context_data  = $bulk->get_bulk_instance( $group['context'] )->get_context_data();
+						$group         = array_merge( $group, $context_data );
+						$default_level = Imagify_Options::get_instance()->get( 'optimization_level' );
+
+						if ( Imagify_Options::get_instance()->get( 'lossless' ) ) {
+							$default_level = 0;
+						}
+
+						$group['level'] = $default_level;
+
+						$running = get_transient( "imagify_{$group['context']}_optimize_running" );
+
+						$group['spinner_class']  = 'hidden';
+						$group['spinner_aria']   = 'aria-hidden="true"';
+						$group['checkbox_class'] = '';
+						$group['checkbox_aria']  = 'aria-hidden="false"';
+
+						if ( false !== $running ) {
+							$group['spinner_class']  = '';
+							$group['spinner_aria']   = 'aria-hidden="false"';
+							$group['checkbox_class'] = 'hidden';
+							$group['checkbox_aria']  = 'aria-hidden="true"';
+						}
 
 						$this->print_template( 'part-bulk-optimization-table-row-folder-type', $group );
 					}
@@ -61,17 +110,4 @@ defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
 			</table>
 		</div><!-- .imagify-bulk-table-container -->
 	</div><!-- .imagify-bulk-table-content -->
-
-	<?php
-	foreach ( $data['groups'] as $group ) {
-		?>
-		<script type="text/html" id="tmpl-imagify-file-header-<?php echo $group['group_id']; ?>">
-			<?php $this->print_template( 'part-bulk-optimization-header-row-' . $group['group_id'] ); ?>
-		</script>
-		<script type="text/html" id="tmpl-imagify-file-row-<?php echo $group['group_id']; ?>">
-			<?php $this->print_template( 'part-bulk-optimization-underscore-file-row-' . $group['group_id'] ); ?>
-		</script>
-		<?php
-	}
-	?>
 </div>

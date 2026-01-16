@@ -1,6 +1,6 @@
 <?php
 /**
- * Fetch Search stats from WordPress.com.
+ * Get search stats for use in the wp-admin dashboard.
  *
  * @package automattic/jetpack-search
  */
@@ -9,6 +9,10 @@ namespace Automattic\Jetpack\Search;
 
 use Automattic\Jetpack\Connection\Client;
 use Jetpack_Options;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit( 0 );
+}
 
 /**
  * Search stats (e.g. post count, post type breakdown)

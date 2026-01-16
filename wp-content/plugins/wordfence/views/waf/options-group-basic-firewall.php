@@ -181,6 +181,7 @@ if (!isset($collapseable)) {
 									var validateContinue = function() {
 										var backupsAvailable = $('.wf-waf-backups:visible').data('backups');
 										var backupsDownloaded = $('#wf-waf-server-config').data('backups');
+										var blocked = $(".wf-waf-install-blocked:visible").length > 0;
 
 										var matchCount = 0;
 										backupsAvailable = backupsAvailable.sort();
@@ -193,7 +194,8 @@ if (!isset($collapseable)) {
 											}
 										}
 
-										$('#wf-waf-install-continue, #wf-waf-uninstall-continue').toggleClass('wf-disabled', matchCount != backupsAvailable.length);
+										var disabled = blocked || matchCount != backupsAvailable.length;
+										$('#wf-waf-install-continue, #wf-waf-uninstall-continue').toggleClass('wf-disabled', disabled).prop("disabled", disabled);
 									};
 
 									var installUninstallResponseHandler = function(action, res) {
@@ -284,7 +286,11 @@ if (!isset($collapseable)) {
 												e.preventDefault();
 												e.stopPropagation();
 
-												window.location.reload(true);
+												<?php if (array_key_exists('wf_deactivate', $_GET)): ?>
+													window.location.href = <?php echo json_encode(wfUtils::wpAdminURL('plugins.php?wf_deactivate=true')); ?>;
+												<?php else: ?>
+													window.location.reload(true);
+												<?php endif ?>
 											});
 											$.wfcolorbox.resize();
 										}
@@ -359,6 +365,22 @@ if (!isset($collapseable)) {
 												}
 												else {
 													$('.wf-waf-download-instructions').hide();
+												}
+
+												var isNginxUnit = (el.val() == "nginx-unit");
+												$("#wf-waf-install-continue").prop("disabled", isNginxUnit);
+												var nginxUnitNotice = $(".wf-nginx-unit-waf-config");
+												if (nginxUnitNotice.length) {
+													if (isNginxUnit) {
+														nginxUnitNotice.fadeIn(400, function() {
+															$.wfcolorbox.resize();
+														});
+													}
+													else {
+														nginxUnitNotice.fadeOut(400, function() {
+															$.wfcolorbox.resize();
+														});
+													}
 												}
 
 												if (nginxNotice.length) { //Install only

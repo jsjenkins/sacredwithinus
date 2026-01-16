@@ -67,37 +67,47 @@ function ls_acf_show_admin($show) {
 add_filter('acf/settings/show_admin', 'ls_acf_show_admin');
 
 // Add ACF options page
-if( function_exists('acf_add_options_page') ) {
+function ls_acf_add_options_pages() {
+    if( function_exists('acf_add_options_page') ) {
 
-    acf_add_options_page(array(
-        'page_title'    => 'Theme Settings',
-        'menu_title'    => 'Theme Settings',
-        'menu_slug'     => 'theme-settings',
-        'capability'    => 'edit_posts',
-        'redirect'      => false
-    ));
+        acf_add_options_page(array(
+            'page_title'    => 'Theme Settings',
+            'menu_title'    => 'Theme Settings',
+            'menu_slug'     => 'theme-settings',
+            'capability'    => 'edit_posts',
+            'redirect'      => false
+        ));
 
-    acf_add_options_sub_page(array(
-        'page_title'    => 'General Information',
-        'menu_title'    => 'General Info',
-        'parent_slug'   => 'theme-settings',
-    ));
+        acf_add_options_sub_page(array(
+            'page_title'    => 'General Information',
+            'menu_title'    => 'General Info',
+            'parent_slug'   => 'theme-settings',
+        ));
 
-    acf_add_options_sub_page(array(
-        'page_title'    => 'Social Media',
-        'menu_title'    => 'Social Media',
-        'parent_slug'   => 'theme-settings',
-    ));
+        acf_add_options_sub_page(array(
+            'page_title'    => 'Social Media',
+            'menu_title'    => 'Social Media',
+            'parent_slug'   => 'theme-settings',
+        ));
 
-    acf_add_options_sub_page(array(
-        'page_title'    => 'Footer',
-        'menu_title'    => 'Footer',
-        'parent_slug'   => 'theme-settings',
-    ));
+        acf_add_options_sub_page(array(
+            'page_title'    => 'Footer',
+            'menu_title'    => 'Footer',
+            'parent_slug'   => 'theme-settings',
+        ));
+    }
 }
+add_filter('acf/init', 'ls_acf_add_options_pages');
 
 // Move yoast priority lower
 function yoast_to_bottom() {
     return 'low';
 }
 add_filter( 'wpseo_metabox_prio', 'yoast_to_bottom');
+
+// Remove Rocket Insights column from posts/pages list page
+function ls_remove_rocket_insights($columns) {
+    unset($columns['rocket_insights']);
+    return $columns;
+}
+add_filter('manage_posts_columns', 'ls_remove_rocket_insights', 99);

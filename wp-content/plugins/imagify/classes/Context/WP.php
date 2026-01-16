@@ -1,7 +1,7 @@
 <?php
 namespace Imagify\Context;
 
-defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
+use Imagify\Traits\InstanceGetterTrait;
 
 /**
  * Context class used for the WP media library.
@@ -9,15 +9,14 @@ defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
  * @since  1.9
  * @author Grégory Viguier
  */
-class WP extends AbstractContext {
-	use \Imagify\Traits\InstanceGetterTrait;
+final class WP extends AbstractContext {
+	use InstanceGetterTrait;
 
 	/**
 	 * Context "short name".
 	 *
 	 * @var    string
 	 * @since  1.9
-	 * @access protected
 	 * @author Grégory Viguier
 	 */
 	protected $context = 'wp';
@@ -27,16 +26,14 @@ class WP extends AbstractContext {
 	 *
 	 * @var    int
 	 * @since  1.9.8
-	 * @access protected
 	 * @author Grégory Viguier
 	 */
-	protected $resizing_threshold;
+	protected $resizing_threshold = 0;
 
 	/**
 	 * Get the thumbnail sizes for this context, except the full size.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return array {
@@ -50,10 +47,6 @@ class WP extends AbstractContext {
 	 * }
 	 */
 	public function get_thumbnail_sizes() {
-		if ( isset( $this->thumbnail_sizes ) ) {
-			return $this->thumbnail_sizes;
-		}
-
 		$this->thumbnail_sizes = get_imagify_thumbnail_sizes();
 
 		return $this->thumbnail_sizes;
@@ -64,19 +57,12 @@ class WP extends AbstractContext {
 	 * 0 means to not resize.
 	 *
 	 * @since  1.9.8
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return int
 	 */
 	public function get_resizing_threshold() {
-		if ( isset( $this->resizing_threshold ) ) {
-			return $this->resizing_threshold;
-		}
-
-		if ( ! get_imagify_option( 'resize_larger' ) ) {
-			$this->resizing_threshold = 0;
-		} else {
+		if ( get_imagify_option( 'resize_larger' ) ) {
 			$this->resizing_threshold = max( 0, get_imagify_option( 'resize_larger_w' ) );
 		}
 
@@ -87,45 +73,20 @@ class WP extends AbstractContext {
 	 * Tell if the optimization process is allowed to backup in this context.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
 	 */
 	public function can_backup() {
-		if ( isset( $this->can_backup ) ) {
-			return $this->can_backup;
-		}
-
 		$this->can_backup = get_imagify_option( 'backup' );
 
 		return $this->can_backup;
 	}
 
 	/**
-	 * Tell if the optimization process is allowed to keep exif in this context.
-	 *
-	 * @since  1.9
-	 * @access public
-	 * @author Grégory Viguier
-	 *
-	 * @return bool
-	 */
-	public function can_keep_exif() {
-		if ( isset( $this->can_keep_exif ) ) {
-			return $this->can_keep_exif;
-		}
-
-		$this->can_keep_exif = get_imagify_option( 'exif' );
-
-		return $this->can_keep_exif;
-	}
-
-	/**
 	 * Get user capacity to operate Imagify in this context.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @param  string $describer Capacity describer. Possible values are like 'manage', 'bulk-optimize', 'manual-optimize', 'auto-optimize'.

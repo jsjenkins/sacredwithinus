@@ -38,6 +38,15 @@ class Controller_TOTP {
 		global $wpdb;
 		$table = Controller_DB::shared()->secrets;
 		$wpdb->query($wpdb->prepare("INSERT INTO `{$table}` (`user_id`, `secret`, `recovery`, `ctime`, `vtime`, `mode`) VALUES (%d, %s, %s, UNIX_TIMESTAMP(), %d, 'authenticator')", $user->ID, Model_Compat::hex2bin($secret), implode('', array_map(function($r) { return Model_Compat::hex2bin($r); }, $recovery)), $vtime));
+		
+		/**
+		 * Fires when 2FA is enabled for a user.
+		 *
+		 * @since 1.1.13
+		 *
+		 * @param \WP_User $user The user.
+		 */
+		do_action('wordfence_ls_2fa_activated', $user);
 	}
 	
 	/**
@@ -48,7 +57,7 @@ class Controller_TOTP {
 	 * @param string $code
 	 * @return bool|null Returns null if the user does not have 2FA enabled, false if the code is invalid, and true if valid.
 	 */
-	public function validate_2fa($user, $code) {
+	public function validate_2fa($user, $code, $update = true) {
 		global $wpdb;
 		$table = Controller_DB::shared()->secrets;
 		$record = $wpdb->get_row($wpdb->prepare("SELECT * FROM `{$table}` WHERE `user_id` = %d FOR UPDATE", $user->ID), ARRAY_A);
@@ -62,9 +71,11 @@ class Controller_TOTP {
 			
 			$index = array_search($code, $recoveryCodes);
 			if ($index !== false) {
-				unset($recoveryCodes[$index]);
-				$updatedRecoveryCodes = implode('', $recoveryCodes);
-				$wpdb->query($wpdb->prepare("UPDATE `{$table}` SET `recovery` = X%s WHERE `id` = %d", $updatedRecoveryCodes, $record['id']));
+				if ($update) {
+					unset($recoveryCodes[$index]);
+					$updatedRecoveryCodes = implode('', $recoveryCodes);
+					$wpdb->query($wpdb->prepare("UPDATE `{$table}` SET `recovery` = X%s WHERE `id` = %d", $updatedRecoveryCodes, $record['id']));
+				}
 				$wpdb->query('COMMIT');
 				return true;
 			}
@@ -75,7 +86,9 @@ class Controller_TOTP {
 			
 			$matches = $this->check_code($secret, $code, floor($record['vtime'] / self::TIME_WINDOW_LENGTH));
 			if ($matches !== false) {
-				$wpdb->query($wpdb->prepare("UPDATE `{$table}` SET `vtime` = %d WHERE `id` = %d", $matches, $record['id']));
+				if ($update) {
+					$wpdb->query($wpdb->prepare("UPDATE `{$table}` SET `vtime` = %d WHERE `id` = %d", $matches, $record['id']));
+				}
 				$wpdb->query('COMMIT');
 				return true;
 			}

@@ -1,8 +1,6 @@
 <?php
 namespace Imagify\Context;
 
-defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
-
 /**
  * Abstract used for contexts.
  *
@@ -16,17 +14,15 @@ abstract class AbstractContext implements ContextInterface {
 	 *
 	 * @var    string
 	 * @since  1.9
-	 * @access protected
 	 * @author Grégory Viguier
 	 */
-	protected $context;
+	protected $context = '';
 
 	/**
 	 * Tell if the media/context is network-wide.
 	 *
 	 * @var    bool
 	 * @since  1.9
-	 * @access protected
 	 * @author Grégory Viguier
 	 */
 	protected $is_network_wide = false;
@@ -39,7 +35,6 @@ abstract class AbstractContext implements ContextInterface {
 	 *     - 'image' to allow only images.
 	 *     - 'not-image' to allow only pdf files.
 	 * @since  1.9
-	 * @access protected
 	 * @see    imagify_get_mime_types()
 	 * @author Grégory Viguier
 	 */
@@ -58,36 +53,23 @@ abstract class AbstractContext implements ContextInterface {
 	 *     @type string $name   The size name.
 	 * }
 	 * @since  1.9
-	 * @access protected
 	 * @author Grégory Viguier
 	 */
-	protected $thumbnail_sizes;
+	protected $thumbnail_sizes = [];
 
 	/**
 	 * Tell if the optimization process is allowed to backup in this context.
 	 *
 	 * @var    bool
 	 * @since  1.9
-	 * @access protected
 	 * @author Grégory Viguier
 	 */
-	protected $can_backup;
-
-	/**
-	 * Tell if the optimization process is allowed to keep exif in this context.
-	 *
-	 * @var    bool
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
-	 */
-	protected $can_keep_exif;
+	protected $can_backup = false;
 
 	/**
 	 * Get the context "short name".
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return string
@@ -100,7 +82,6 @@ abstract class AbstractContext implements ContextInterface {
 	 * Tell if the context is network-wide.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -113,7 +94,6 @@ abstract class AbstractContext implements ContextInterface {
 	 * Get the type of files this context allows.
 	 *
 	 * @since  1.9
-	 * @access protected
 	 * @see    imagify_get_mime_types()
 	 * @author Grégory Viguier
 	 *
@@ -130,7 +110,6 @@ abstract class AbstractContext implements ContextInterface {
 	 * Get the thumbnail sizes for this context, except the full size.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return array {
@@ -151,7 +130,6 @@ abstract class AbstractContext implements ContextInterface {
 	 * Tell if the optimization process is allowed resize in this context.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -164,7 +142,6 @@ abstract class AbstractContext implements ContextInterface {
 	 * Tell if the optimization process is allowed to backup in this context.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @return bool
@@ -174,23 +151,9 @@ abstract class AbstractContext implements ContextInterface {
 	}
 
 	/**
-	 * Tell if the optimization process is allowed to keep exif in this context.
-	 *
-	 * @since  1.9
-	 * @access public
-	 * @author Grégory Viguier
-	 *
-	 * @return bool
-	 */
-	public function can_keep_exif() {
-		return $this->can_keep_exif;
-	}
-
-	/**
 	 * Tell if the current user is allowed to operate Imagify in this context.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @param  string $describer Capacity describer. See $this->get_capacity() for possible values. Can also be a "real" user capacity.
@@ -198,14 +161,13 @@ abstract class AbstractContext implements ContextInterface {
 	 * @return bool
 	 */
 	public function current_user_can( $describer, $media_id = null ) {
-		return $this->user_can( null, $describer, $media_id );
+		return $this->user_can( 0, $describer, $media_id );
 	}
 
 	/**
 	 * Tell if a user is allowed to operate Imagify in this context.
 	 *
 	 * @since  1.9
-	 * @access public
 	 * @author Grégory Viguier
 	 *
 	 * @param  int|\WP_User $user_id   A user ID or \WP_User object. Fallback to the current user ID.
@@ -214,6 +176,7 @@ abstract class AbstractContext implements ContextInterface {
 	 * @return bool
 	 */
 	public function user_can( $user_id, $describer, $media_id = null ) {
+		$user            = 0;
 		$current_user_id = get_current_user_id();
 
 		if ( ! $user_id ) {
@@ -251,7 +214,7 @@ abstract class AbstractContext implements ContextInterface {
 			 * @param int    $media_id  A media ID.
 			 * @param string $context   The context name.
 			 */
-			$user_can = (bool) apply_filters( 'imagify_current_user_can', $user_can, $capacity, $describer, $media_id, $this->get_name() );
+			$user_can = wpm_apply_filters_typed( 'boolean', 'imagify_current_user_can', $user_can, $capacity, $describer, $media_id, $this->get_name() );
 		} else {
 			$user_can = user_can( $user, $capacity, $media_id );
 		}
@@ -259,8 +222,7 @@ abstract class AbstractContext implements ContextInterface {
 		/**
 		 * Tell if the given user is allowed to operate Imagify in this context.
 		 *
-		 * @since  1.9
-		 * @author Grégory Viguier
+		 * @since 1.9
 		 *
 		 * @param bool   $user_can  Tell if the given user is allowed to operate Imagify in this context.
 		 * @param int    $user_id   The user ID.
@@ -269,14 +231,13 @@ abstract class AbstractContext implements ContextInterface {
 		 * @param int    $media_id  A media ID.
 		 * @param string $context   The context name.
 		 */
-		return (bool) apply_filters( 'imagify_user_can', $user_can, $user_id, $capacity, $describer, $media_id, $this->get_name() );
+		return wpm_apply_filters_typed( 'boolean', 'imagify_user_can', $user_can, $user_id, $capacity, $describer, $media_id, $this->get_name() );
 	}
 
 	/**
 	 * Filter a user capacity used to operate Imagify in this context.
 	 *
 	 * @since  1.9
-	 * @access protected
 	 * @author Grégory Viguier
 	 *
 	 * @param  string $capacity  The user capacity.
@@ -296,6 +257,6 @@ abstract class AbstractContext implements ContextInterface {
 		 * @param string $describer Capacity describer. Possible values are like 'manage', 'bulk-optimize', 'manual-optimize', 'auto-optimize'.
 		 * @param string $context   The context name.
 		 */
-		return (string) apply_filters( 'imagify_capacity', $capacity, $describer, $this->get_name() );
+		return wpm_apply_filters_typed( 'string', 'imagify_capacity', $capacity, $describer, $this->get_name() );
 	}
 }

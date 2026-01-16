@@ -10,6 +10,7 @@ class wfLog {
 	private $wp_version = '';
 	private $db = false;
 	private $googlePattern = '/\.(?:googlebot\.com|google\.[a-z]{2,3}|google\.[a-z]{2}\.[a-z]{2}|1e100\.net)$/i';
+	private $loginsTable, $statusTable;
 	private static $gbSafeCache = array();
 
 	/**
@@ -44,8 +45,9 @@ class wfLog {
 			$UA = (isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '');
 		}
 		
+		$ipHex = wfDB::binaryValueToSQLHex(wfUtils::inet_pton($IP));
 		$table = wfDB::networkTable('wfLiveTrafficHuman');
-		if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table} WHERE IP = %s AND identifier = %s AND expiration >= UNIX_TIMESTAMP()", wfUtils::inet_pton($IP), hash('sha256', $UA, true)))) {
+		if ($wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table} WHERE IP = {$ipHex} AND identifier = %s AND expiration >= UNIX_TIMESTAMP()", hash('sha256', $UA, true)))) {
 			return true;
 		}
 		return false;
@@ -69,8 +71,9 @@ class wfLog {
 			$UA = (isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '');
 		}
 		
+		$ipHex = wfDB::binaryValueToSQLHex(wfUtils::inet_pton($IP));
 		$table = wfDB::networkTable('wfLiveTrafficHuman');
-		if ($wpdb->get_var($wpdb->prepare("INSERT IGNORE INTO {$table} (IP, identifier, expiration) VALUES (%s, %s, UNIX_TIMESTAMP() + 86400)", wfUtils::inet_pton($IP), hash('sha256', $UA, true)))) {
+		if ($wpdb->get_var($wpdb->prepare("INSERT IGNORE INTO {$table} (IP, identifier, expiration) VALUES ({$ipHex}, %s, UNIX_TIMESTAMP() + 86400)", hash('sha256', $UA, true)))) {
 			return true;
 		}
 	}
@@ -89,11 +92,7 @@ class wfLog {
 		$this->wp_version = $wp_version;
 		$this->hitsTable = wfDB::networkTable('wfHits');
 		$this->loginsTable = wfDB::networkTable('wfLogins');
-		$this->blocksTable = wfBlock::blocksTable();
-		$this->lockOutTable = wfDB::networkTable('wfLockedOut');
-		$this->throttleTable = wfDB::networkTable('wfThrottleLog');
 		$this->statusTable = wfDB::networkTable('wfStatus');
-		$this->ipRangesTable = wfDB::networkTable('wfBlocksAdv');
 		
 		add_filter('determine_current_user', array($this, '_userIDDetermined'), 99, 1);
 	}
@@ -188,14 +187,14 @@ class wfLog {
 		}
 
 		//Else userID stays 0 but we do log this even though the user doesn't exist.
-		$this->getDB()->queryWrite("insert into " . $this->loginsTable . " (hitID, ctime, fail, action, username, userID, IP, UA) values (%d, %f, %d, '%s', '%s', %s, %s, '%s')",
+		$ipHex = wfDB::binaryValueToSQLHex(wfUtils::inet_pton(wfUtils::getIP()));
+		$this->getDB()->queryWrite("insert into " . $this->loginsTable . " (hitID, ctime, fail, action, username, userID, IP, UA) values (%d, %f, %d, '%s', '%s', %s, {$ipHex}, '%s')",
 			$hitID,
 			sprintf('%.6f', microtime(true)),
 			$fail,
 			$action,
 			$username,
 			$userID,
-			wfUtils::inet_pton(wfUtils::getIP()),
 			(isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '')
 			);
 	}
@@ -214,19 +213,19 @@ class wfLog {
 		wfRateLimit::countHit($type, wfUtils::getIP());
 		
 		if (wfRateLimit::globalRateLimit()->shouldEnforce($type)) {
-			$this->takeBlockingAction('maxGlobalRequests', __("Exceeded the maximum global requests per minute for crawlers or humans.", 'wordfence'));
+			$this->takeBlockingAction('maxGlobalRequests', wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_THROTTLEGLOBAL));
 		}
 		else if (wfRateLimit::crawlerViewsRateLimit()->shouldEnforce($type)) {
-			$this->takeBlockingAction('maxRequestsCrawlers', __("Exceeded the maximum number of requests per minute for crawlers.", 'wordfence')); //may not exit
+			$this->takeBlockingAction('maxRequestsCrawlers', wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_THROTTLECRAWLER)); //may not exit
 		}
 		else if (wfRateLimit::crawler404sRateLimit()->shouldEnforce($type)) {
-			$this->takeBlockingAction('max404Crawlers', __("Exceeded the maximum number of page not found errors per minute for a crawler.", 'wordfence'));
+			$this->takeBlockingAction('max404Crawlers', wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_THROTTLECRAWLERNOTFOUND));
 		}
 		else if (wfRateLimit::humanViewsRateLimit()->shouldEnforce($type)) {
-			$this->takeBlockingAction('maxRequestsHumans', __("Exceeded the maximum number of page requests per minute for humans.", 'wordfence'));
+			$this->takeBlockingAction('maxRequestsHumans', wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_THROTTLEHUMAN));
 		}
 		else if (wfRateLimit::human404sRateLimit()->shouldEnforce($type)) {
-			$this->takeBlockingAction('max404Humans', __("Exceeded the maximum number of page not found errors per minute for humans.", 'wordfence'));
+			$this->takeBlockingAction('max404Humans', wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_THROTTLEHUMANNOTFOUND));
 		}
 	}
 	
@@ -271,8 +270,9 @@ class wfLog {
 		global $wpdb;
 		$IPSQL = "";
 		if($IP){
-			$IPSQL = " and IP=%s ";
-			$sqlArgs = array($afterTime, wfUtils::inet_pton($IP), $limit);
+			$ipHex = wfDB::binaryValueToSQLHex(wfUtils::inet_pton($IP));
+			$IPSQL = " and IP={$ipHex} ";
+			$sqlArgs = array($afterTime, $limit);
 		} else {
 			$sqlArgs = array($afterTime, $limit);
 		}
@@ -347,6 +347,15 @@ class wfLog {
 		return $results;
 	}
 
+	private function processActionDescription($description) {
+		switch ($description) {
+		case wfWAFBlockI18n::WFWAF_BLOCK_UAREFIPRANGE:
+			return __('UA/Hostname/Referrer/IP Range not allowed', 'wordfence');
+		default:
+			return $description;
+		}
+	}
+
 	/**
 	 * @param string $type
 	 * @param array $results
@@ -370,6 +379,8 @@ class wfLog {
 			$res['blocked'] = false;
 			$res['rangeBlocked'] = false;
 			$res['ipRangeID'] = -1;
+			if (array_key_exists('actionDescription', $res))
+				$res['actionDescription'] = $this->processActionDescription($res['actionDescription']);
 			
 			$ipBlock = wfBlock::findIPBlock($res['IP']);
 			if ($ipBlock !== false) {
@@ -464,6 +475,10 @@ class wfLog {
 			} else {
 				$res['user'] = false;
 			}
+			
+			if (array_key_exists('actionDescription', $res)) {
+				$res['actionDescription'] = wfWAFBlockI18n::getTranslatedBlockDescription($res['actionDescription']);
+			}
 		}
 	}
 
@@ -552,8 +567,8 @@ class wfLog {
 			if ($b->matchRequest($IP, $userAgent, $referrer) !== wfBlock::MATCH_NONE) {
 				$b->recordBlock();
 				wfActivityReport::logBlockedIP($IP, null, 'advanced');
-				$this->currentRequest->actionDescription = __('UA/Referrer/IP Range not allowed', 'wordfence');
-				$this->do503(3600, __("Advanced blocking in effect.", 'wordfence')); //exits
+				$this->currentRequest->actionDescription = wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_UAREFIPRANGE);
+				$this->do503(3600, wfI18n::__("Advanced blocking in effect.", 'wordfence')); //exits
 			}
 		}
 
@@ -565,7 +580,7 @@ class wfLog {
 				$bypassRedirDest = wfConfig::get('cbl_bypassRedirDest', '');
 				
 				$this->initLogRequest();
-				$this->getCurrentRequest()->actionDescription = __('redirected to bypass URL', 'wordfence');
+				$this->getCurrentRequest()->actionDescription = wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_COUNTRY_BYPASS_REDIR);
 				$this->getCurrentRequest()->statusCode = 302;
 				$this->currentRequest->action = 'cbl:redirect';
 				$this->logHit();
@@ -579,7 +594,7 @@ class wfLog {
 				wfConfig::inc('totalCountryBlocked');
 				
 				$this->initLogRequest();
-				$this->getCurrentRequest()->actionDescription = sprintf(/* translators: URL */ __('blocked access via country blocking and redirected to URL (%s)', 'wordfence'), wfConfig::get('cbl_redirURL'));
+				$this->getCurrentRequest()->actionDescription = wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_COUNTRY_REDIR, wfConfig::get('cbl_redirURL'));
 				$this->getCurrentRequest()->statusCode = 503;
 				if (!$this->getCurrentRequest()->action) {
 					$this->currentRequest->action = 'blocked:wordfence';
@@ -594,10 +609,10 @@ class wfLog {
 			}
 			else if ($match !== wfBlock::MATCH_NONE) {
 				$b->recordBlock();
-				$this->currentRequest->actionDescription = __('blocked access via country blocking', 'wordfence');
+				$this->currentRequest->actionDescription = wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_COUNTRY);
 				wfConfig::inc('totalCountryBlocked');
 				wfActivityReport::logBlockedIP($IP, null, 'country');
-				$this->do503(3600, __('Access from your area has been temporarily limited for security reasons', 'wordfence'));
+				$this->do503(3600, wfI18n::__('Access from your area has been temporarily limited for security reasons', 'wordfence'));
 			}
 		}
 
@@ -612,7 +627,7 @@ class wfLog {
 			}
 			$reason = $ipBlock->reason;
 			if ($ipBlock->type == wfBlock::TYPE_IP_MANUAL || $ipBlock->type == wfBlock::TYPE_IP_AUTOMATIC_PERMANENT) {
-				$reason = __('Manual block by administrator', 'wordfence');
+				$reason = wfWAFBlockI18n::getBlockDescription(wfWAFBlockI18n::WFWAF_BLOCK_MANUAL);
 			}
 			$this->do503($secsToGo, $reason); //exits
 		}
@@ -702,6 +717,7 @@ class wfLog {
 			header('Retry-After: ' . $secsToGo);
 		}
 		$customText = wpautop(wp_strip_all_tags(wfConfig::get('blockCustomText', '')));
+		$reason = wfWAFBlockI18n::getTranslatedBlockDescription($reason);
 		require_once(dirname(__FILE__) . '/wf503.php');
 		exit();
 	}
@@ -896,14 +912,20 @@ class wfUserIPRange {
 			return (strcmp($ip1N, $ipN) <= 0 && strcmp($ip2N, $ipN) >= 0);
 		}
 		else { //Treat as a literal IP
-			$ip1 = @wfUtils::inet_pton($ip_string);
-			$ip2 = @wfUtils::inet_pton($ip);
+			$ip1 = wfUtils::inet_pton($ip_string);
+			$ip2 = wfUtils::inet_pton($ip);
 			if ($ip1 !== false && $ip1 == $ip2) {
 				return true;
 			}
 		}
 		
 		return false;
+	}
+
+	private static function repeatString($string, $count) {
+		if ($count <= 0)
+			return '';
+		return str_repeat($string, $count);
 	}
 
 	/**
@@ -922,7 +944,7 @@ class wfUserIPRange {
 		}
 		$dbl_colon_pos = strpos($ip_range, '::');
 		if ($dbl_colon_pos !== false) {
-			$ip_range = str_replace('::', str_repeat(':0000',
+			$ip_range = str_replace('::', self::repeatString(':0000',
 					(($dbl_colon_pos === 0 || $dbl_colon_pos === strlen($ip_range) - 2) ? 9 : 8) - $colon_count) . ':', $ip_range);
 			$ip_range = trim($ip_range, ':');
 		}
@@ -990,10 +1012,15 @@ class wfUserIPRange {
 		$ip_string = $this->getIPString();
 		if (preg_match('/[^0-9a-f:\.\-]/i', $ip_string)) { return false; }
 		list($ip1, $ip2) = explode("-", $ip_string);
-		$ip1N = @wfUtils::inet_pton($ip1);
-		$ip2N = @wfUtils::inet_pton($ip2);
 		
-		if ($ip1N === false || !wfUtils::isValidIP($ip1) || $ip2N === false || !wfUtils::isValidIP($ip2)) {
+		if (!wfUtils::isValidIP($ip1) || !wfUtils::isValidIP($ip2)) {
+			return false;
+		}
+		
+		$ip1N = wfUtils::inet_pton($ip1);
+		$ip2N = wfUtils::inet_pton($ip2);
+		
+		if ($ip1N === false || $ip2N === false) {
 			return false;
 		}
 		
@@ -1021,6 +1048,8 @@ class wfUserIPRange {
 	}
 
 	protected function _sanitizeIPRange($ip_string) {
+		if (!is_string($ip_string))
+			return null;
 		$ip_string = preg_replace('/\s/', '', $ip_string); //Strip whitespace
 		$ip_string = preg_replace('/[\\x{2013}-\\x{2015}]/u', '-', $ip_string); //Non-hyphen dashes to hyphen
 		$ip_string = strtolower($ip_string);
@@ -1259,7 +1288,7 @@ class wfRequestModel extends wfModel {
 	 * @param $actionData
 	 * @return mixed|string|void
 	 */
-	public static function serializeActionData($actionData) {
+	public static function serializeActionData($actionData, $optionalKeys = array(), $maxLength = 65535) {
 		if (is_array($actionData)) {
 			foreach (self::$actionDataEncodedParams as $key) {
 				if (array_key_exists($key, $actionData)) {
@@ -1267,7 +1296,31 @@ class wfRequestModel extends wfModel {
 				}
 			}
 		}
-		return json_encode($actionData);
+		do {
+			$serialized = json_encode($actionData, JSON_UNESCAPED_SLASHES);
+			$length = strlen($serialized);
+			if ($length <= $maxLength)
+				return $serialized;
+			$excess = $length - $maxLength;
+			$truncated = false;
+			foreach ($optionalKeys as $key) {
+				if (array_key_exists($key, $actionData)) {
+					$fieldValue = $actionData[$key];
+					$fieldLength = strlen($fieldValue);
+					$truncatedLength = min($fieldLength, $excess);
+					$truncated = true;
+					if ($truncatedLength > 0) {
+						$actionData[$key] = substr($fieldValue, 0, -$truncatedLength);
+						$excess -= $truncatedLength;
+					}
+					else {
+						unset($actionData[$key]);
+						break;
+					}
+				}
+			}
+		} while ($truncated);
+		return null;
 	}
 
 	/**
@@ -1282,6 +1335,9 @@ class wfRequestModel extends wfModel {
 					$actionData[$key] = base64_decode($actionData[$key]);
 				}
 			}
+		}
+		else {
+			$actionData = array();
 		}
 		return $actionData;
 	}
@@ -1982,7 +2038,7 @@ class wfErrorLogHandler {
 		if ($errorLogs === null) {
 			$searchPaths = array(ABSPATH, ABSPATH . 'wp-admin', ABSPATH . 'wp-content');
 			
-			$homePath = get_home_path();
+			$homePath = wfUtils::getHomePath();
 			if (!in_array($homePath, $searchPaths)) {
 				$searchPaths[] = $homePath;
 			}
@@ -2011,6 +2067,10 @@ class wfErrorLogHandler {
 		}
 		
 		$path = untrailingslashit($path);
+		if (empty($path)) {
+			return array();
+		}
+		
 		$contents = @scandir($path);
 		if (!is_array($contents)) {
 			return array();

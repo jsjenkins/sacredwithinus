@@ -1,5 +1,5 @@
-const { default: md5 } = require( 'md5-es' );
 const i18n = require( '@wordpress/i18n' );
+const { default: md5 } = require( 'md5-es' );
 
 const locationMap = {
 	plugin: 'plugins/',
@@ -20,10 +20,10 @@ module.exports = {
 	/**
 	 * Download and register translations for a bundle.
 	 *
-	 * @param {string} path - Bundle path being fetched. May have a query part.
-	 * @param {string} domain - Text domain to register into.
+	 * @param {string} path     - Bundle path being fetched. May have a query part.
+	 * @param {string} domain   - Text domain to register into.
 	 * @param {string} location - Location for the translation: 'plugin', 'theme', or 'core'.
-	 * @returns {Promise} Resolved when the translations are registered, or rejected with an `Error`.
+	 * @return {Promise} Resolved when the translations are registered, or rejected with an `Error`.
 	 */
 	async downloadI18n( path, domain, location ) {
 		const state = this.state;

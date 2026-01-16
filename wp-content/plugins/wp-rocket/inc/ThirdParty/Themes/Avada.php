@@ -23,10 +23,6 @@ class Avada implements Subscriber_Interface {
 	 * @return array
 	 */
 	public static function get_subscribed_events() {
-		if ( ! self::is_avada() ) {
-			return [];
-		}
-
 		return [
 			'avada_clear_dynamic_css_cache'        => 'clean_domain',
 			'rocket_exclude_defer_js'              => 'exclude_defer_js',
@@ -34,17 +30,9 @@ class Avada implements Subscriber_Interface {
 			'fusion_cache_reset_after'             => 'clean_domain',
 			'update_option_fusion_options'         => [ 'maybe_deactivate_lazyload', 10, 2 ],
 			'rocket_wc_product_gallery_delay_js_exclusions' => 'exclude_delay_js',
+			'init'                                 => 'disable_compilers',
+			'rocket_lazyload_bg_images_regex'      => 'fix_regex_lazyload_bg_images',
 		];
-	}
-
-	/**
-	 * Check if is Avada theme.
-	 *
-	 * @return boolean
-	 */
-	private static function is_avada() {
-		$current_theme = wp_get_theme();
-		return 'avada' === strtolower( $current_theme->get( 'Name' ) ) || 'avada' === strtolower( $current_theme->get_template() );
 	}
 
 	/**
@@ -71,8 +59,8 @@ class Avada implements Subscriber_Interface {
 	 *
 	 * @since 3.3.4
 	 *
-	 * @param string $old_value Previous Avada option value.
-	 * @param string $value     New Avada option value.
+	 * @param array $old_value Previous Avada option value.
+	 * @param array $value     New Avada option value.
 	 * @return void
 	 */
 	public function maybe_deactivate_lazyload( $old_value, $value ) {
@@ -112,7 +100,7 @@ class Avada implements Subscriber_Interface {
 			return $disable_images_lazyload;
 		}
 
-		if ( ! empty( $avada_options['lazy_load'] && 'avada' !== $avada_options['lazy_load'] ) ) {
+		if ( 'avada' !== $avada_options['lazy_load'] ) {
 			return $disable_images_lazyload;
 		}
 
@@ -140,5 +128,25 @@ class Avada implements Subscriber_Interface {
 		$exclusions[] = $base_path . '/assets/min/js/general/avada-woo-product-images.js';
 
 		return $exclusions;
+	}
+
+	/**
+	 * Disable CSS and JS combine file from Avada.
+	 */
+	public function disable_compilers() {
+		if ( $this->options->get( 'remove_unused_css', false ) && ! defined( 'FUSION_DISABLE_COMPILERS' ) ) {
+			define( 'FUSION_DISABLE_COMPILERS', true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
+		}
+	}
+
+	/**
+	 * Add a fix to the lazyload regex on background images.
+	 *
+	 * @param string $regex regex used to deleted background images.
+	 *
+	 * @return string
+	 */
+	public function fix_regex_lazyload_bg_images( $regex ) {
+		return '(--awb-)?' . $regex;
 	}
 }

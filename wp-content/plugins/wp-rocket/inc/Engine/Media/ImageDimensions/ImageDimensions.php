@@ -7,9 +7,14 @@ use SplFileInfo;
 use WP_Filesystem_Direct;
 use WP_Rocket\Admin\Options_Data;
 use WP_Rocket\Engine\Admin\Settings\Settings;
+use WP_Rocket\Engine\Optimization\RegexTrait;
+use WP_Rocket\Engine\Support\CommentTrait;
 use WP_Rocket\Logger\Logger;
 
 class ImageDimensions {
+	use RegexTrait;
+	use CommentTrait;
+
 	/**
 	 * Options_Data instance
 	 *
@@ -74,7 +79,7 @@ class ImageDimensions {
 	 *
 	 * @param string $html Buffer Page HTML contents.
 	 *
-	 * @return string Buffer Page HTML contents after inserting dimentions into images.
+	 * @return string Buffer Page HTML contents after inserting dimensions into images.
 	 */
 	public function specify_image_dimensions( $html ) {
 		Logger::debug( 'Start Specify Image Dimensions.' );
@@ -92,13 +97,16 @@ class ImageDimensions {
 		 *
 		 * @since  3.8
 		 *
-		 * @param bool Do or not. Default is True, so it will skip all img tags that are inside picture tag.
+		 * @param bool $skip_pictures Do or not. Default is True, so it will skip all img tags that are inside picture tag.
 		 */
 		if ( apply_filters( 'rocket_specify_dimension_skip_pictures', true ) ) {
 			$images_regex = '<\s*picture[^>]*>.*<\s*\/\s*picture\s*>(*SKIP)(*FAIL)|' . $images_regex;
 		}
 
-		preg_match_all( "/{$images_regex}/Uis", $html, $images_match );
+		$clean_html = $this->hide_scripts( $html );
+		$clean_html = $this->hide_noscripts( $clean_html );
+
+		preg_match_all( "/{$images_regex}/Uis", $clean_html, $images_match );
 
 		if ( empty( $images_match ) ) {
 			Logger::debug( 'Specify Image Dimensions failed because there is no image without dimensions on this page.' );
@@ -112,7 +120,7 @@ class ImageDimensions {
 		 *
 		 * @since  3.8
 		 *
-		 * @param array Page images.
+		 * @param array $images Page images.
 		 */
 		$images = apply_filters( 'rocket_specify_dimension_images', $images_match[0] );
 
@@ -149,7 +157,9 @@ class ImageDimensions {
 			return $html;
 		}
 
-		return str_replace( array_keys( $replaces ), $replaces, $html );
+		$html = str_replace( array_keys( $replaces ), $replaces, $html );
+
+		return $this->add_meta_comment( 'image_dimensions', $html );
 	}
 
 	/**
@@ -202,14 +212,10 @@ class ImageDimensions {
 
 		$hosts = array_unique( $hosts );
 
-		if ( empty( $hosts ) ) {
-			return true;
-		}
-
 		// URL has domain and domain is part of the internal domains.
 		if ( ! empty( $file['host'] ) ) {
 			foreach ( $hosts as $host ) {
-				if ( false !== strpos( $url, $host ) ) {
+				if ( false !== strpos( $file['host'], $host ) ) {
 					return false;
 				}
 			}
@@ -253,7 +259,7 @@ class ImageDimensions {
 		 *
 		 * @since 3.8
 		 *
-		 * @param bool Specify image dimensions for external images or not.
+		 * @param bool $specify_dimensions_external Specify image dimensions for external images or not.
 		 */
 		return ini_get( 'allow_url_fopen' ) && apply_filters( 'rocket_specify_image_dimensions_for_distant', false );
 	}
@@ -267,8 +273,8 @@ class ImageDimensions {
 	 * @return string|false
 	 */
 	private function set_dimensions( string $image, array $sizes ) {
-		preg_match( '/<img.*height=[\'\"](?<height>\S+)[\'\"].*>/i', $image, $initial_height );
-		preg_match( '/<img.*width=[\'\"](?<width>\S+)[\'\"].*>/i', $image, $initial_width );
+		preg_match( '/<img.*\sheight=[\'\"]?(?<height>[^\'\"\s]+)[\'\"]?.*>/i', $image, $initial_height );
+		preg_match( '/<img.*\swidth=[\'\"]?(?<width>[^\'\"\s]+)[\'\"]?.*>/i', $image, $initial_width );
 
 		if (
 			empty( $initial_height['height'] )
@@ -307,6 +313,8 @@ class ImageDimensions {
 
 			return 'width="' . $initial_width['width'] . '" height="' . (int) round( $sizes[1] * $ratio ) . '"';
 		}
+
+		return false;
 	}
 
 	/**
@@ -319,7 +327,7 @@ class ImageDimensions {
 	 */
 	private function assign_width_height( string $image, string $width_height ): string {
 		// Remove old width and height attributes if found.
-		$changed_image = preg_replace( '/(height|width)=[\'"](?:\S+)*[\'"]\s?/i', '', $image );
+		$changed_image = preg_replace( '/\s(height|width)=(?:[\'"]?(?:[^\'\"\s]+)*[\'"]?)?/i', '', $image );
 		$changed_image = preg_replace( '/<\s*img/i', '<img ' . $width_height, $changed_image );
 
 		if ( null === $changed_image ) {
@@ -366,7 +374,7 @@ class ImageDimensions {
 		 *
 		 * @since 2.2
 		 *
-		 * @param bool Do the job or not.
+		 * @param bool $specify_dimensions Do the job or not.
 		 */
 		return apply_filters( 'rocket_specify_image_dimensions', false )
 			||
@@ -393,7 +401,6 @@ class ImageDimensions {
 		}
 
 		return $src_match['url'];
-
 	}
 
 	/**
@@ -488,7 +495,7 @@ class ImageDimensions {
 	 * @return array|false
 	 */
 	private function svg_getimagesize( string $filename ) {
-		$svgfile = simplexml_load_file( rawurlencode( $filename ) );
+		$svgfile = simplexml_load_file( rawurlencode( $filename ), 'SimpleXMLElement', rocket_get_constant( 'LIBXML_NOERROR', 32 ) | rocket_get_constant( 'LIBXML_NOWARNING', 64 ) );
 
 		if ( ! $svgfile ) {
 			return false;
@@ -506,7 +513,7 @@ class ImageDimensions {
 			$size[0] = $width;
 			$size[1] = $height;
 			$size[2] = 0;
-			$size[3] = 'width="' . $width . '" height="' . $height . '"';
+			$size[3] = 'width="' . absint( $width ) . '" height="' . absint( $height ) . '"';
 
 			return $size;
 		}
@@ -522,7 +529,7 @@ class ImageDimensions {
 				$size[0] = $view_box[2];
 				$size[1] = $view_box[3];
 				$size[2] = 0;
-				$size[3] = 'width="' . $size[0] . '" height="' . $size[1] . '"';
+				$size[3] = 'width="' . absint( $size[0] ) . '" height="' . absint( $size[1] ) . '"';
 
 				return $size;
 			}

@@ -12,13 +12,19 @@ namespace Automattic\Jetpack;
  * contain the package classes shown below. The consumer plugin
  * must require the corresponding packages to use these features.
  */
+use Automattic\Jetpack\Account_Protection\Account_Protection as Jetpack_Account_Protection_Main;
 use Automattic\Jetpack\Connection\Manager;
 use Automattic\Jetpack\Connection\Plugin;
-use Automattic\Jetpack\JITM as JITM;
+use Automattic\Jetpack\Import\Main as Import_Main;
 use Automattic\Jetpack\JITMS\JITM as JITMS_JITM;
-use Automattic\Jetpack\Post_List\Post_List as Post_List;
+use Automattic\Jetpack\Post_List\Post_List;
+use Automattic\Jetpack\Publicize\Publicize_Setup;
 use Automattic\Jetpack\Search\Initializer as Jetpack_Search_Main;
+use Automattic\Jetpack\Stats\Main as Stats_Main;
+use Automattic\Jetpack\Stats_Admin\Main as Stats_Admin_Main;
 use Automattic\Jetpack\Sync\Main as Sync_Main;
+use Automattic\Jetpack\VideoPress\Initializer as VideoPress_Pkg_Initializer;
+use Automattic\Jetpack\Waf\Waf_Initializer as Jetpack_Waf_Main;
 
 /**
  * The configuration class.
@@ -35,12 +41,20 @@ class Config {
 	 * @var Array
 	 */
 	protected $config = array(
-		'jitm'            => false,
-		'connection'      => false,
-		'sync'            => false,
-		'post_list'       => false,
-		'identity_crisis' => false,
-		'search'          => false,
+		'jitm'               => false,
+		'connection'         => false,
+		'sync'               => false,
+		'post_list'          => false,
+		'identity_crisis'    => false,
+		'search'             => false,
+		'publicize'          => false,
+		'account_protection' => false,
+		'waf'                => false,
+		'videopress'         => false,
+		'stats'              => false,
+		'stats_admin'        => false,
+		'yoast_promo'        => false,
+		'import'             => false,
 	);
 
 	/**
@@ -59,13 +73,14 @@ class Config {
 		 * being constructed on priority 1.
 		 */
 		add_action( 'plugins_loaded', array( $this, 'on_plugins_loaded' ), 2 );
-
 	}
 
 	/**
 	 * Require a feature to be initialized. It's up to the package consumer to actually add
 	 * the package to their composer project. Declaring a requirement using this method
 	 * instructs the class to initialize it.
+	 *
+	 * Run the options method (if exists) every time the method is called.
 	 *
 	 * @param String $feature the feature slug.
 	 * @param array  $options Additional options, optional.
@@ -74,6 +89,11 @@ class Config {
 		$this->config[ $feature ] = true;
 
 		$this->set_feature_options( $feature, $options );
+
+		$method_options = 'ensure_options_' . $feature;
+		if ( method_exists( $this, $method_options ) ) {
+			$this->{ $method_options }();
+		}
 	}
 
 	/**
@@ -113,6 +133,40 @@ class Config {
 			$this->ensure_class( 'Automattic\Jetpack\Search\Initializer' )
 				&& $this->ensure_feature( 'search' );
 		}
+
+		if ( $this->config['publicize'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\Publicize\Publicize_UI' ) && $this->ensure_class( 'Automattic\Jetpack\Publicize\Publicize' )
+				&& $this->ensure_feature( 'publicize' );
+		}
+
+		if ( $this->config['account_protection'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\Account_Protection\Account_Protection' )
+				&& $this->ensure_feature( 'account_protection' );
+		}
+
+		if ( $this->config['waf'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\Waf\Waf_Initializer' )
+				&& $this->ensure_feature( 'waf' );
+		}
+
+		if ( $this->config['videopress'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\VideoPress\Initializer' ) && $this->ensure_feature( 'videopress' );
+		}
+		if ( $this->config['stats'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\Stats\Main' ) && $this->ensure_feature( 'stats' );
+		}
+		if ( $this->config['stats_admin'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\Stats_Admin\Main' ) && $this->ensure_feature( 'stats_admin' );
+		}
+
+		if ( $this->config['yoast_promo'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\Yoast_Promo' ) && $this->ensure_feature( 'yoast_promo' );
+		}
+
+		if ( $this->config['import'] ) {
+			$this->ensure_class( 'Automattic\Jetpack\Import\Main' )
+				&& $this->ensure_feature( 'import' );
+		}
 	}
 
 	/**
@@ -146,7 +200,6 @@ class Config {
 
 	/**
 	 * Ensures a feature is enabled, sets it up if it hasn't already been set up.
-	 * Run the options method (if exists) every time the method is called.
 	 *
 	 * @param String $feature slug of the feature.
 	 * @return Integer either FEATURE_ENSURED, FEATURE_ALREADY_ENSURED or FEATURE_NOT_AVAILABLE constants.
@@ -155,11 +208,6 @@ class Config {
 		$method = 'enable_' . $feature;
 		if ( ! method_exists( $this, $method ) ) {
 			return self::FEATURE_NOT_AVAILABLE;
-		}
-
-		$method_options = 'ensure_options_' . $feature;
-		if ( method_exists( $this, $method_options ) ) {
-			$this->{ $method_options }();
 		}
 
 		if ( did_action( 'jetpack_feature_' . $feature . '_enabled' ) ) {
@@ -186,6 +234,7 @@ class Config {
 			JITMS_JITM::configure();
 		} else {
 			// Provides compatibility with jetpack-jitm <v1.6.
+			// @phan-suppress-next-line PhanUndeclaredClassMethod
 			JITM::configure();
 		}
 
@@ -231,6 +280,97 @@ class Config {
 	 */
 	protected function enable_search() {
 		Jetpack_Search_Main::init();
+	}
+
+	/**
+	 * Enables the Publicize feature.
+	 */
+	protected function enable_publicize() {
+		Publicize_Setup::configure();
+
+		return true;
+	}
+
+	/**
+	 * Handles Publicize options.
+	 */
+	protected function ensure_options_publicize() {
+		$options = $this->get_feature_options( 'publicize' );
+
+		if ( ! empty( $options['force_refresh'] ) ) {
+			Publicize_Setup::$refresh_plan_info = true;
+		}
+	}
+
+	/**
+	 * Enables Account Protection.
+	 */
+	protected function enable_account_protection() {
+		$account_protection = Jetpack_Account_Protection_Main::instance();
+		$account_protection->initialize();
+
+		return true;
+	}
+
+	/**
+	 * Enables Waf.
+	 */
+	protected function enable_waf() {
+		Jetpack_Waf_Main::init();
+
+		return true;
+	}
+
+	/**
+	 * Enables VideoPress.
+	 */
+	protected function enable_videopress() {
+		VideoPress_Pkg_Initializer::init();
+		return true;
+	}
+
+	/**
+	 * Enables Stats.
+	 */
+	protected function enable_stats() {
+		Stats_Main::init();
+		return true;
+	}
+
+	/**
+	 * Enables Stats Admin.
+	 */
+	protected function enable_stats_admin() {
+		Stats_Admin_Main::init();
+		return true;
+	}
+
+	/**
+	 * Handles VideoPress options
+	 */
+	protected function ensure_options_videopress() {
+		$options = $this->get_feature_options( 'videopress' );
+		if ( ! empty( $options ) ) {
+			VideoPress_Pkg_Initializer::update_init_options( $options );
+		}
+		return true;
+	}
+
+	/**
+	 * Enables Yoast Promo.
+	 */
+	protected function enable_yoast_promo() {
+		Yoast_Promo::init();
+		return true;
+	}
+
+	/**
+	 * Enables the Import feature.
+	 */
+	protected function enable_import() {
+		Import_Main::configure();
+
+		return true;
 	}
 
 	/**
@@ -315,5 +455,4 @@ class Config {
 	protected function get_feature_options( $feature ) {
 		return empty( $this->feature_options[ $feature ] ) ? array() : $this->feature_options[ $feature ];
 	}
-
 }

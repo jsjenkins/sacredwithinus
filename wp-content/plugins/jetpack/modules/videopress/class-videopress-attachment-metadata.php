@@ -7,6 +7,10 @@
 
 use Automattic\Jetpack\Connection\Client;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit( 0 );
+}
+
 /**
  * Class Videopress_Attachment_Metadata
  */
@@ -15,18 +19,19 @@ class Videopress_Attachment_Metadata {
 	/**
 	 * Persist the VideoPress metadata information, including rating and display_embed.
 	 *
-	 * @param string|int $post_id        The post id.
-	 * @param string     $guid           VideoPress Guid.
-	 * @param string     $post_title     The post title.
-	 * @param string     $caption        Video caption.
-	 * @param string     $post_excerpt   The post excerpt.
-	 * @param string     $rating         The rating.
-	 * @param int        $display_embed  The display_embed.
-	 * @param int        $allow_download Allow video downloads.
+	 * @param string|int $post_id         The post id.
+	 * @param string     $guid            VideoPress Guid.
+	 * @param string     $post_title      The post title.
+	 * @param string     $caption         Video caption.
+	 * @param string     $post_excerpt    The post excerpt.
+	 * @param string     $rating          The rating.
+	 * @param int        $display_embed   The display_embed.
+	 * @param int        $allow_download  Allow video downloads.
+	 * @param int        $privacy_setting The video privacy setting.
 	 *
 	 * @return bool|\WP_Error
 	 */
-	public static function persist_metadata( $post_id, $guid, $post_title, $caption, $post_excerpt, $rating, $display_embed, $allow_download ) {
+	public static function persist_metadata( $post_id, $guid, $post_title, $caption, $post_excerpt, $rating, $display_embed, $allow_download, $privacy_setting ) {
 		$post_id = absint( $post_id );
 
 		$args = array(
@@ -35,14 +40,15 @@ class Videopress_Attachment_Metadata {
 		);
 
 		// Keep null values to avoid accidental unset.
-		$display_embed  = null === $display_embed ? null : (int) $display_embed;
-		$allow_download = null === $allow_download ? null : (int) $allow_download;
+		$display_embed   = null === $display_embed ? null : (int) $display_embed;
+		$allow_download  = null === $allow_download ? null : (int) $allow_download;
+		$privacy_setting = null === $privacy_setting ? null : (int) $privacy_setting;
 
-		$values         = self::build_wpcom_api_request_values( $post_title, $caption, $post_excerpt, $rating, $display_embed, $allow_download );
+		$values         = self::build_wpcom_api_request_values( $post_title, $caption, $post_excerpt, $rating, $display_embed, $allow_download, $privacy_setting );
 		$endpoint       = 'videos';
 		$values['guid'] = $guid;
 
-		$result = Client::wpcom_json_api_request_as_blog( $endpoint, '2', $args, wp_json_encode( $values ), 'wpcom' );
+		$result = Client::wpcom_json_api_request_as_blog( $endpoint, '2', $args, wp_json_encode( $values, JSON_UNESCAPED_SLASHES ), 'wpcom' );
 
 		$validated_result = self::validate_result( $result );
 		if ( true !== $validated_result ) {
@@ -68,6 +74,10 @@ class Videopress_Attachment_Metadata {
 			$meta['videopress']['rating'] = $values['rating'];
 		}
 
+		if ( isset( $values['privacy_setting'] ) ) {
+			$meta['videopress']['privacy_setting'] = $values['privacy_setting'];
+		}
+
 		wp_update_attachment_metadata( $post_id, $meta );
 
 		return true;
@@ -82,7 +92,7 @@ class Videopress_Attachment_Metadata {
 	 */
 	public static function is_videopress_media( $item ) {
 		if ( defined( 'IS_WPCOM' ) && IS_WPCOM ) {
-			return 0 === strpos( $item->mime_type, 'video/' );
+			return str_starts_with( $item->mime_type, 'video/' );
 		}
 
 		// Else, we are in Jetpack and we need to check if the video is video/videopress.
@@ -108,6 +118,16 @@ class Videopress_Attachment_Metadata {
 	 */
 	private static function is_allow_download_valid( $allow_download ) {
 		return in_array( $allow_download, array( 0, 1 ), true );
+	}
+
+	/**
+	 * Check if privacy_setting has valid values
+	 *
+	 * @param mixed $privacy_setting The value to test.
+	 * @return bool
+	 */
+	private static function is_privacy_setting_valid( $privacy_setting ) {
+		return in_array( $privacy_setting, array( VIDEOPRESS_PRIVACY::IS_PUBLIC, VIDEOPRESS_PRIVACY::IS_PRIVATE, VIDEOPRESS_PRIVACY::SITE_DEFAULT ), true );
 	}
 
 	/**
@@ -147,10 +167,11 @@ class Videopress_Attachment_Metadata {
 	 * @param string $rating The video rating.
 	 * @param string $display_embed The video display_embed.
 	 * @param int    $allow_download The video allow_download.
+	 * @param int    $privacy_setting The video privacy setting.
 	 *
 	 * @return array
 	 */
-	private static function build_wpcom_api_request_values( $post_title, $caption, $post_excerpt, $rating, $display_embed, $allow_download ) {
+	private static function build_wpcom_api_request_values( $post_title, $caption, $post_excerpt, $rating, $display_embed, $allow_download, $privacy_setting ) {
 		$values = array();
 
 		// Add the video title & description in, so that we save it properly.
@@ -176,6 +197,10 @@ class Videopress_Attachment_Metadata {
 
 		if ( self::is_allow_download_valid( $allow_download ) ) {
 			$values['allow_download'] = $allow_download;
+		}
+
+		if ( self::is_privacy_setting_valid( $privacy_setting ) ) {
+			$values['privacy_setting'] = $privacy_setting;
 		}
 
 		return $values;

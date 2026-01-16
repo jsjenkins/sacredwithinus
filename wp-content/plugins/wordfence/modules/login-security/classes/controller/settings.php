@@ -26,6 +26,10 @@ class Controller_Settings {
 	const OPTION_DELETE_ON_DEACTIVATION = 'delete-deactivation';
 	const OPTION_PREFIX_REQUIRED_2FA_ROLE = 'required-2fa-role';
 	const OPTION_ENABLE_WOOCOMMERCE_INTEGRATION = 'enable-woocommerce-integration';
+	const OPTION_ENABLE_WOOCOMMERCE_ACCOUNT_INTEGRATION = 'enable-woocommerce-account-integration';
+	const OPTION_ENABLE_SHORTCODE = 'enable-shortcode';
+	const OPTION_ENABLE_LOGIN_HISTORY_COLUMNS = 'enable-login-history-columns';
+	const OPTION_STACK_UI_COLUMNS = 'stack-ui-columns';
 	
 	//Internal
 	const OPTION_GLOBAL_NOTICES = 'global-notices';
@@ -38,6 +42,9 @@ class Controller_Settings {
 	const OPTION_SHARED_SYMMETRIC_SECRET_KEY = 'shared-symmetric-secret';
 	const OPTION_DISMISSED_FRESH_INSTALL_MODAL = 'dismissed-fresh-install-modal';
 	const OPTION_CAPTCHA_STATS = 'captcha-stats';
+	const OPTION_SCHEMA_VERSION = 'schema-version';
+	const OPTION_USER_COUNT_QUERY_STATE = 'user-count-query-state';
+	const OPTION_DISABLE_TEMPORARY_TABLES = 'disable-temporary-tables';
 
 	const DEFAULT_REQUIRE_2FA_USER_GRACE_PERIOD = 10;
 	const MAX_REQUIRE_2FA_USER_GRACE_PERIOD = 99;
@@ -87,7 +94,14 @@ class Controller_Settings {
 			self::OPTION_RECAPTCHA_THRESHOLD => array('value' => 0.5, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
 			self::OPTION_LAST_SECRET_REFRESH => array('value' => 0, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
 			self::OPTION_DELETE_ON_DEACTIVATION => array('value' => false, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
-			self::OPTION_ENABLE_WOOCOMMERCE_INTEGRATION => array('value' => false, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false)
+			self::OPTION_ENABLE_WOOCOMMERCE_INTEGRATION => array('value' => false, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
+			self::OPTION_ENABLE_WOOCOMMERCE_ACCOUNT_INTEGRATION => array('value' => false, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
+			self::OPTION_ENABLE_SHORTCODE => array('value' => false, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
+			self::OPTION_ENABLE_LOGIN_HISTORY_COLUMNS => array('value' => true, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
+			self::OPTION_STACK_UI_COLUMNS => array('value' => true, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
+			self::OPTION_SCHEMA_VERSION => array('value' => 0, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
+			self::OPTION_USER_COUNT_QUERY_STATE => array('value' => 0, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false),
+			self::OPTION_DISABLE_TEMPORARY_TABLES => array('value' => 0, 'autoload' => Model_Settings::AUTOLOAD_YES, 'allowOverwrite' => false)
 		));
 	}
 	
@@ -126,7 +140,14 @@ class Controller_Settings {
 	}
 	
 	public function get_array($key, $default = array()) {
-		return (array) @json_decode($this->get($key, $default), true);
+		$value = $this->get($key, null);
+		if (is_string($value)) {
+			$value = @json_decode($value, true);
+		}
+		else {
+			$value = null;
+		}
+		return is_array($value) ? $value : $default;
 	}
 	
 	public function remove($key) {
@@ -152,11 +173,20 @@ class Controller_Settings {
 			case self::OPTION_CAPTCHA_TEST_MODE:
 			case self::OPTION_DISMISSED_FRESH_INSTALL_MODAL:
 			case self::OPTION_DELETE_ON_DEACTIVATION:
+			case self::OPTION_ENABLE_WOOCOMMERCE_INTEGRATION:
+			case self::OPTION_ENABLE_WOOCOMMERCE_ACCOUNT_INTEGRATION:
+			case self::OPTION_ENABLE_SHORTCODE:
+			case self::OPTION_ENABLE_LOGIN_HISTORY_COLUMNS:
+			case self::OPTION_STACK_UI_COLUMNS:
+			case self::OPTION_USER_COUNT_QUERY_STATE:
+			case self::OPTION_DISABLE_TEMPORARY_TABLES:
 				return true;
 				
 			//Int
 			case self::OPTION_LAST_SECRET_REFRESH:
-				return is_numeric($value);
+				return is_numeric($value); //Left using is_numeric to prevent issues with existing values
+			case self::OPTION_SCHEMA_VERSION:
+				return Utility_Number::isInteger($value, 0);
 				
 			//Array
 			case self::OPTION_GLOBAL_NOTICES:
@@ -166,28 +196,29 @@ class Controller_Settings {
 			//Special
 			case self::OPTION_IP_TRUSTED_PROXIES:
 			case self::OPTION_2FA_WHITELISTED:
+				$value = !is_string($value) ? '' : $value;
 				$parsed = array_filter(array_map(function($s) { return trim($s); }, preg_split('/[\r\n]/', $value)));
 				foreach ($parsed as $entry) {
 					if (!Controller_Whitelist::shared()->is_valid_range($entry)) {
-						return sprintf(__('The IP/range %s is invalid.', 'wordfence-2fa'), esc_html($entry));
+						return sprintf(__('The IP/range %s is invalid.', 'wordfence'), esc_html($entry));
 					}
 				}
 				return true;
 			case self::OPTION_IP_SOURCE:
 				if (!in_array($value, array(Model_Request::IP_SOURCE_AUTOMATIC, Model_Request::IP_SOURCE_REMOTE_ADDR, Model_Request::IP_SOURCE_X_FORWARDED_FOR, Model_Request::IP_SOURCE_X_REAL_IP))) {
-					return __('An invalid IP source was provided.', 'wordfence-2fa');
+					return __('An invalid IP source was provided.', 'wordfence');
 				}
 				return true;
 			case self::OPTION_REQUIRE_2FA_GRACE_PERIOD:
 				$gracePeriodEnd = strtotime($value);
 				if ($gracePeriodEnd <= \WordfenceLS\Controller_Time::time()) {
-					return __('The grace period end time must be in the future.', 'wordfence-2fa');
+					return __('The grace period end time must be in the future.', 'wordfence');
 				}
 				return true;
 			case self::OPTION_REMEMBER_DEVICE_DURATION:
 				return is_numeric($value) && $value > 0;
 			case self::OPTION_RECAPTCHA_THRESHOLD:
-				return is_numeric($value) && $value >= 0 && $value <= 1;
+				return is_numeric($value) && $value > 0 && $value <= 1;
 			case self::OPTION_RECAPTCHA_SITE_KEY:
 				if (empty($value)) {
 					return true;
@@ -203,11 +234,11 @@ class Controller_Settings {
 					
 					$data = wp_remote_retrieve_body($response);
 					if (strpos($data, 'grecaptcha') === false) {
-						return __('Unable to validate the reCAPTCHA site key. Please check the key and try again.', 'wordfence-2fa');
+						return __('Unable to validate the reCAPTCHA site key. Please check the key and try again.', 'wordfence');
 					}
 					return true;
 				}
-				return sprintf(__('An error was encountered while validating the reCAPTCHA site key: %s', 'wordfence-2fa'), $response->get_error_message());
+				return sprintf(__('An error was encountered while validating the reCAPTCHA site key: %s', 'wordfence'), $response->get_error_message());
 			case self::OPTION_REQUIRE_2FA_USER_GRACE_PERIOD:
 				return is_numeric($value) && $value >= 0 && $value <= self::MAX_REQUIRE_2FA_USER_GRACE_PERIOD;
 		}
@@ -249,12 +280,20 @@ class Controller_Settings {
 			case self::OPTION_CAPTCHA_TEST_MODE:
 			case self::OPTION_DISMISSED_FRESH_INSTALL_MODAL:
 			case self::OPTION_DELETE_ON_DEACTIVATION:
+			case self::OPTION_ENABLE_WOOCOMMERCE_INTEGRATION:
+			case self::OPTION_ENABLE_WOOCOMMERCE_ACCOUNT_INTEGRATION:
+			case self::OPTION_ENABLE_SHORTCODE;
+			case self::OPTION_ENABLE_LOGIN_HISTORY_COLUMNS:
+			case self::OPTION_STACK_UI_COLUMNS:
+			case self::OPTION_USER_COUNT_QUERY_STATE:
+			case self::OPTION_DISABLE_TEMPORARY_TABLES:
 				return $this->_truthy_to_bool($value);
 				
 			//Int
 			case self::OPTION_REMEMBER_DEVICE_DURATION:
 			case self::OPTION_LAST_SECRET_REFRESH:
 			case self::OPTION_REQUIRE_2FA_USER_GRACE_PERIOD:
+			case self::OPTION_SCHEMA_VERSION:
 				return (int) $value;
 				
 			//Float
@@ -264,6 +303,7 @@ class Controller_Settings {
 			//Special
 			case self::OPTION_IP_TRUSTED_PROXIES:
 			case self::OPTION_2FA_WHITELISTED:
+				$value = !is_string($value) ? '' : $value;
 				$parsed = array_filter(array_map(function($s) { return trim($s); }, preg_split('/[\r\n]/', $value)));
 				$cleaned = array();
 				foreach ($parsed as $item) {
@@ -318,16 +358,198 @@ class Controller_Settings {
 			if ($role === 'super-admin') {
 				$roleValid = true;
 			}
-			elseif (in_array($value, array(self::STATE_2FA_OPTIONAL, self::STATE_2FA_REQUIRED))) {
+			else if (in_array($value, array(self::STATE_2FA_OPTIONAL, self::STATE_2FA_REQUIRED))) {
 				$roleValid = Controller_Permissions::shared()->allow_2fa_self($role);
 			}
 			else {
 				$roleValid = Controller_Permissions::shared()->disallow_2fa_self($role);
 			}
-			if ($roleValid)
+			
+			if (!in_array($value, array(self::STATE_2FA_OPTIONAL, self::STATE_2FA_REQUIRED))) {
+				$value = self::STATE_2FA_DISABLED;
+			}
+			
+			if ($roleValid) {
 				$settings[$this->get_required_2fa_role_key($role)] = ($value === self::STATE_2FA_REQUIRED ? time() : -1);
+			}
+			
+			/**
+			 * Fires when 2FA availability/required on a role changes.
+			 *
+			 * @since 1.1.13
+			 *
+			 * @param string $role The name of the role.
+			 * @param string $state The state of 2FA on the role.
+			 */
+			do_action('wordfence_ls_changed_2fa_required', $role, $value);
+			
 			return true;
 		}
+		
+		//Settings that will dispatch actions
+		switch ($key) {
+			case self::OPTION_XMLRPC_ENABLED:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when the XML-RPC 2FA requirement changes.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param bool $before The previous value.
+					 * @param bool $after The new value.
+					 */
+					do_action('wordfence_ls_xml_rpc_2fa_toggled', $before, $after);
+				}
+				break;
+			case self::OPTION_2FA_WHITELISTED:
+				$before = $this->whitelisted_ips();
+				$after = explode("\n", $value); //Already cleaned here so just re-split
+					
+				if ($before != $after) {
+					/**
+					 * Fires when the whitelist changes.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param string[] $before The previous value.
+					 * @param string[] $after The new value.
+					 */
+					do_action('wordfence_ls_updated_allowed_ips', $before, $after);
+				}
+				break;
+			case self::OPTION_IP_SOURCE:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when the IP source changes.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param string $before The previous value.
+					 * @param string $after The new value.
+					 */
+					do_action('wordfence_ls_changed_ip_source', $before, $after);
+				}
+				break;
+			case self::OPTION_IP_TRUSTED_PROXIES:
+				$before = $this->trusted_proxies();
+				$after = explode("\n", $value); //Already cleaned here so just re-split
+				
+				if (count($before) == count($after) && empty(array_diff($before, $after))) {
+					/**
+					 * Fires when the trusted proxy list changes.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param string[] $before The previous value.
+					 * @param string[] $after The new value.
+					 */
+					do_action('wordfence_ls_updated_trusted_proxies', $before, $after);
+				}
+				break;
+			case self::OPTION_REQUIRE_2FA_USER_GRACE_PERIOD:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when the grace period changes.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param int $before The previous value.
+					 * @param int $after The new value.
+					 */
+					do_action('wordfence_ls_changed_grace_period', $before, $after);
+				}
+				break;
+			case self::OPTION_ALLOW_XML_RPC:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when the XML-RPC is enabled/disabled.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param bool $before The previous value.
+					 * @param bool $after The new value.
+					 */
+					do_action('wordfence_ls_xml_rpc_enabled_toggled', $before, $after);
+				}
+				break;
+			case self::OPTION_ENABLE_AUTH_CAPTCHA:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when the login captcha is enabled/disabled.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param bool $before The previous value.
+					 * @param bool $after The new value.
+					 */
+					do_action('wordfence_ls_captcha_enabled_toggled', $before, $after);
+				}
+				break;
+			case self::OPTION_RECAPTCHA_THRESHOLD:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when the reCAPTCHA threshold changes.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param float $before The previous value.
+					 * @param float $after The new value.
+					 */
+					do_action('wordfence_ls_captcha_threshold_changed', $before, $after);
+				}
+				break;
+			case self::OPTION_ENABLE_WOOCOMMERCE_INTEGRATION:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when WooCommerce integration is enabled/disabled.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param bool $before The previous value.
+					 * @param bool $after The new value.
+					 */
+					do_action('wordfence_ls_woocommerce_enabled_toggled', $before, $after);
+				}
+				break;
+			case self::OPTION_CAPTCHA_TEST_MODE:
+				$before = $this->get($key);
+				$after = $value;
+				
+				if ($before != $after) {
+					/**
+					 * Fires when captcha test mode is enabled/disabled.
+					 *
+					 * @since 1.1.13
+					 *
+					 * @param bool $before The previous value.
+					 * @param bool $after The new value.
+					 */
+					do_action('wordfence_ls_captcha_test_mode_toggled', $before, $after);
+				}
+				break;
+		}
+		
 		return false;
 	}
 	
@@ -416,7 +638,15 @@ class Controller_Settings {
 	public function disable_ntp_cron() {
 		$this->set(self::OPTION_NTP_FAILURE_COUNT, -1);
 	}
-	
+
+	public function are_login_history_columns_enabled() {
+		return Controller_Settings::shared()->get_bool(Controller_Settings::OPTION_ENABLE_LOGIN_HISTORY_COLUMNS, true);
+	}
+
+	public function should_stack_ui_columns() {
+		return self::shared()->get_bool(Controller_Settings::OPTION_STACK_UI_COLUMNS, true);
+	}
+
 	/**
 	 * Utility
 	 */
@@ -430,6 +660,10 @@ class Controller_Settings {
 	protected function _truthy_to_bool($value) {
 		if ($value === true || $value === false) {
 			return $value;
+		}
+		
+		if (is_null($value)) {
+			return false;
 		}
 		
 		if (is_numeric($value)) {

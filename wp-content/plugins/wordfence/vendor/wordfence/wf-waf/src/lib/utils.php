@@ -14,7 +14,7 @@ class wfWAFUtils {
 		if (wfWAFUtils::strlen($ip) == 16 && wfWAFUtils::substr($ip, 0, 12) == "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff") {
 			$ip = wfWAFUtils::substr($ip, 12, 4);
 		}
-		return self::hasIPv6Support() ? @inet_ntop($ip) : self::_inet_ntop($ip);
+		return self::hasIPv6Support() ? inet_ntop($ip) : self::_inet_ntop($ip);
 	}
 
 	/**
@@ -24,9 +24,14 @@ class wfWAFUtils {
 	 * @return string
 	 */
 	public static function inet_pton($ip) {
-		// convert the 4 char IPv4 to IPv6 mapped version.
-		$pton = str_pad(self::hasIPv6Support() ? @inet_pton($ip) : self::_inet_pton($ip), 16,
-			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00", STR_PAD_LEFT);
+		$default = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00";
+		try {
+			// convert the 4 char IPv4 to IPv6 mapped version.
+			$pton = str_pad(self::hasIPv6Support() ? inet_pton($ip) : self::_inet_pton($ip), 16, $default, STR_PAD_LEFT);
+		}
+		catch (Throwable $t) {
+			$pton = $default;
+		}
 		return $pton;
 	}
 
@@ -129,7 +134,11 @@ class wfWAFUtils {
 	 * @return bool
 	 */
 	public static function hasIPv6Support() {
-		return defined('AF_INET6');
+		static $hasSupport = null;
+		if ($hasSupport === null) {
+			$hasSupport = defined('AF_INET6') && is_callable('inet_ntop') && is_callable('inet_pton');
+		}
+		return $hasSupport;
 	}
 
 	/**
@@ -182,6 +191,40 @@ class wfWAFUtils {
 		if (is_object($data))
 			$data = get_object_vars($data);
 		return is_array($data) ? array_map('wfWAFUtils::_json_decode_object_helper', $data) : $data;
+	}
+
+	public static function json_encode_limited($data, $limit, $truncatable) {
+		$json = self::json_encode($data);
+		$size = strlen($json);
+		if ($size > $limit) {
+			$json = null;
+			$minimalData = $data;
+			foreach ($minimalData as $key => &$value) {
+				if (in_array($key, $truncatable)) {
+					$value = '';
+				}
+			}
+			$minimumSize = strlen(self::json_encode($minimalData));
+			if ($minimumSize <= $limit) {
+				$excess = $size - $limit;
+				foreach ($truncatable as $field) {
+					if (!array_key_exists($field, $data))
+						continue;
+					$value = $data[$field];
+					if (is_string($value)) {
+						$originalLength = strlen($value);
+						$truncatedLength = max(0, $originalLength - $excess);
+						$excess -= ($originalLength - $truncatedLength);
+						$data[$field] = substr($value, 0, $truncatedLength);
+					}
+					if ($excess === 0) {
+						$json = self::json_encode($data);
+						break;
+					}
+				}
+			}
+		}
+		return $json;
 	}
 
 	/**
@@ -499,7 +542,11 @@ class wfWAFUtils {
 	 */
 	public static function strpos($haystack, $needle, $offset = 0) {
 		$args = func_get_args();
-		return self::callMBSafeStrFunction('strpos', $args);
+		return self::callMBSafeStrFunction('strpos', array(
+			(string)$haystack,
+			(string)$needle,
+			(int)$offset,
+		));
 	}
 
 	/**
@@ -512,7 +559,7 @@ class wfWAFUtils {
 	public static function substr_count($haystack, $needle, $offset = 0, $length = null) {
 		if ($length === null) { $length = self::strlen($haystack); }
 		return self::callMBSafeStrFunction('substr_count', array(
-			$haystack, $needle, $offset, $length
+			(string)$haystack, (string)$needle, (int)$offset, $length
 		));
 	}
 
@@ -563,7 +610,8 @@ class wfWAFUtils {
 	public static function reverseLookup($IP) {
 		$IPn = self::inet_pton($IP);
 		// This function works for IPv4 or IPv6
-		if (function_exists('gethostbyaddr')) {
+		$host = null;
+		if (function_exists('gethostbyaddr') && is_callable('gethostbyaddr')) {
 			$host = @gethostbyaddr($IP);
 		}
 		if (!$host) {
@@ -574,9 +622,9 @@ class wfWAFUtils {
 				$ptr = implode(".", array_reverse(str_split(bin2hex($IPn)))) . ".ip6.arpa";
 			}
 
-			if ($ptr && function_exists('dns_get_record')) {
+			if ($ptr && function_exists('dns_get_record') && is_callable('dns_get_record')) {
 				$host = @dns_get_record($ptr, DNS_PTR);
-				if ($host) {
+				if ($host && is_array($host) && count($host)) {
 					$host = $host[0]['target'];
 				}
 			}
@@ -602,6 +650,7 @@ class wfWAFUtils {
 	}
 
 	public static function extractBareURI($URL) {
+		$URL = (string)$URL;
 		$URL = preg_replace('/^https?:\/\/[^\/]+/i', '', $URL); //strip of method and host
 		$URL = preg_replace('/\#.*$/', '', $URL); //strip off fragment
 		$URL = preg_replace('/\?.*$/', '', $URL); //strip off query string
@@ -713,7 +762,7 @@ class wfWAFUtils {
 
 	public static function doNotCache() {
 		header("Pragma: no-cache");
-		header("Cache-Control: no-cache, must-revalidate, private");
+		header("Cache-Control: no-cache, must-revalidate, private, max-age=0");
 		header("Expires: Sat, 26 Jul 1997 05:00:00 GMT"); //In the past
 		if (!defined('DONOTCACHEPAGE')) { define('DONOTCACHEPAGE', true); }
 		if (!defined('DONOTCACHEDB')) { define('DONOTCACHEDB', true); }
@@ -964,7 +1013,7 @@ class wfWAFUtils {
 
 		$parts = @parse_url($url);
 
-		if ($parts === false) { // Parsing failure
+		if ($parts === false || !is_array($parts)) { // Parsing failure
 			return $parts;
 		}
 
@@ -1064,13 +1113,12 @@ class wfWAFUtils {
 			$offset = wfWAF::getInstance()->getStorageEngine()->getConfig('timeoffset_ntp', false, 'synced');
 			if ($offset === false) {
 				$offset = wfWAF::getInstance()->getStorageEngine()->getConfig('timeoffset_wf', false, 'synced');
-				if ($offset === false) { $offset = 0; }
 			}
 		}
 		catch (Exception $e) {
 			//Ignore
 		}
-		return time() + $offset;
+		return time() + ((int) $offset);
 	}
 
 	/**
@@ -1130,17 +1178,30 @@ class wfWAFUtils {
 			'pass'      => 'DB_PASSWORD',
 			'database'  => 'DB_NAME',
 			'host'      => 'DB_HOST',
-			'charset'   => 'DB_CHARSET',
-			'collation' => 'DB_COLLATE'
+			'charset'   => array('constant' => 'DB_CHARSET', 'default' => ''),
+			'collation' => array('constant' => 'DB_COLLATE', 'default' => ''),
 		);
 		$constants += $optionalConstants;
 		foreach ($constants as $key => $constant) {
+			unset($defaultValue);
+			if (is_array($constant)) {
+				$defaultValue = $constant['default'];
+				$constant = $constant['constant'];
+			}
+			
 			if (array_key_exists($key, $return)) {
 				continue;
-			} else if (array_key_exists($constant, $parsedConstants)) {
+			}
+			else if (array_key_exists($constant, $parsedConstants)) {
 				$return[$key] = $parsedConstants[$constant];
-			} else if (!array_key_exists($key, $optionalConstants)){
-				return ($return = false);
+			}
+			else if (!array_key_exists($key, $optionalConstants)){
+				if (isset($defaultValue)) {
+					$return[$key] = $defaultValue;
+				}
+				else {
+					return ($return = false);
+				}
 			}
 		}
 
@@ -1190,6 +1251,14 @@ class wfWAFUtils {
 			));
 		}
 		return true;
+	}
+
+	public static function isVersionBelow($target, $compared) {
+		return $compared === null || version_compare($compared, $target, '<');
+	}
+	
+	public static function isCli() {
+		return (@php_sapi_name()==='cli') || !array_key_exists('REQUEST_METHOD', $_SERVER);
 	}
 }
 }

@@ -1,56 +1,38 @@
 <?php
 namespace Imagify\Job;
 
-use Imagify\Media\MediaInterface;
-use Imagify\Optimization\File;
 use Imagify\Optimization\Process\ProcessInterface;
-
-defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
+use Imagify\Traits\InstanceGetterTrait;
+use WP_Error;
 
 /**
  * Job class for media optimization.
  *
- * @since  1.9
- * @author Grégory Viguier
+ * @since 1.9
  */
-class MediaOptimization extends \Imagify_Abstract_Background_Process {
+final class MediaOptimization extends \Imagify_Abstract_Background_Process {
+	use InstanceGetterTrait;
 
 	/**
 	 * Background process: the action to perform.
 	 *
-	 * @var    string
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
+	 * @var   string
+	 * @since 1.9
 	 */
 	protected $action = 'optimize_media';
 
 	/**
 	 * The optimization process instance.
 	 *
-	 * @var    ProcessInterface
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
+	 * @var   ?ProcessInterface
+	 * @since 1.9
 	 */
 	protected $optimization_process;
 
 	/**
-	 * The single instance of the class.
-	 *
-	 * @var    object
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
-	 */
-	protected static $_instance;
-
-	/**
 	 * Handle job logic.
 	 *
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param array $item {
 	 *     The data to use for this job.
@@ -96,9 +78,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 	/**
 	 * Trigger hooks before the optimization job.
 	 *
-	 * @since  1.9
-	 * @access private
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param  array $item See $this->task().
 	 * @return array       The item.
@@ -107,7 +87,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 		if ( ! empty( $item['error'] ) && is_wp_error( $item['error'] ) ) {
 			$wp_error = $item['error'];
 		} else {
-			$wp_error = new \WP_Error();
+			$wp_error = new WP_Error();
 		}
 
 		/**
@@ -115,15 +95,14 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 		 * Any number of files can be optimized, not necessarily all of the media files.
 		 * If you want to return a WP_Error, use the existing $wp_error object.
 		 *
-		 * @since  1.9
-		 * @author Grégory Viguier
+		 * @since 1.9
 		 *
-		 * @param array|\WP_Error  $data     New data to pass along the item. A \WP_Error object to stop the process.
-		 * @param \WP_Error        $wp_error Add errors to this object and return it to stop the process.
+		 * @param array|WP_Error  $data     New data to pass along the item. A WP_Error object to stop the process.
+		 * @param WP_Error        $wp_error Add errors to this object and return it to stop the process.
 		 * @param ProcessInterface $process  The optimization process.
 		 * @param array            $item     The item being processed. See $this->task().
 		 */
-		$data = apply_filters( 'imagify_before_optimize', [], $wp_error, $this->optimization_process, $item );
+		$data = apply_filters( 'imagify_before_optimize', [], $wp_error, $this->optimization_process, $item ); // @phpstan-ignore-line
 
 		if ( is_wp_error( $data ) ) {
 			$wp_error = $data;
@@ -151,15 +130,14 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 		 * Any number of files can be optimized, not necessarily all of the media files.
 		 * If you want to return a WP_Error, use the existing $wp_error object.
 		 *
-		 * @since  1.9
-		 * @author Grégory Viguier
+		 * @since 1.9
 		 *
-		 * @param array|\WP_Error  $data     New data to pass along the item. A \WP_Error object to stop the process.
-		 * @param \WP_Error        $wp_error Add errors to this object and return it to stop the process.
+		 * @param array|WP_Error  $data     New data to pass along the item. A WP_Error object to stop the process.
+		 * @param WP_Error        $wp_error Add errors to this object and return it to stop the process.
 		 * @param ProcessInterface $process  The optimization process.
 		 * @param array            $item     The item being processed. See $this->task().
 		 */
-		$data = apply_filters( "imagify_before_{$hook_suffix}", [], $wp_error, $this->optimization_process, $item );
+		$data = apply_filters( "imagify_before_{$hook_suffix}", [], $wp_error, $this->optimization_process, $item ); // @phpstan-ignore-line
 
 		if ( is_wp_error( $data ) ) {
 			$wp_error = $data;
@@ -183,9 +161,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 	/**
 	 * Start the optimization job.
 	 *
-	 * @since  1.9
-	 * @access private
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param  array $item See $this->task().
 	 * @return array       The item.
@@ -211,8 +187,8 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 				$item['error'] = $data;
 
 			} elseif ( 'already_optimized' === $data['status'] ) {
-				// Status is "already_optimized", try to create WebP versions only.
-				$item['sizes'] = array_filter( $item['sizes'], [ $this->optimization_process, 'is_size_webp' ] );
+				// Status is "already_optimized", try to create next-gen versions only.
+				$item['sizes'] = array_filter( $item['sizes'], [ $this->optimization_process, 'is_size_next_gen' ] );
 
 			} elseif ( 'success' !== $data['status'] ) {
 				// Don't go further if the full size has not the "success" status.
@@ -232,9 +208,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 	/**
 	 * Trigger hooks after the optimization job.
 	 *
-	 * @since  1.9
-	 * @access private
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param  array $item See $this->task().
 	 * @return array       The item.
@@ -248,8 +222,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 		 * Fires after optimizing a media.
 		 * Any number of files can be optimized, not necessarily all of the media files.
 		 *
-		 * @since  1.9
-		 * @author Grégory Viguier
+		 * @since 1.9
 		 *
 		 * @param ProcessInterface $process The optimization process.
 		 * @param array            $item    The item being processed. See $this->task().
@@ -267,8 +240,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 		 * Fires after optimizing a media.
 		 * Any number of files can be optimized, not necessarily all of the media files.
 		 *
-		 * @since  1.9
-		 * @author Grégory Viguier
+		 * @since 1.9
 		 *
 		 * @param ProcessInterface $process The optimization process.
 		 * @param array            $item    The item being processed. See $this->task().
@@ -283,9 +255,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 	 * Validate an item.
 	 * On success, the property $this->optimization_process is set.
 	 *
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param array $item See $this->task().
 	 * @return array|bool The item. False if invalid.
@@ -364,9 +334,7 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 	/**
 	 * Get the process instance.
 	 *
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param array $item             See $this->task().
 	 * @return ProcessInterface|bool The instance object on success. False on failure.
@@ -386,15 +354,17 @@ class MediaOptimization extends \Imagify_Abstract_Background_Process {
 	 * Sanitize and validate an optimization level.
 	 * If not provided (false, null), fallback to the level set in the plugin's settings.
 	 *
-	 * @since  1.9
-	 * @access protected
-	 * @author Grégory Viguier
+	 * @since 1.9
 	 *
 	 * @param  mixed $optimization_level The optimization level.
 	 * @return int
 	 */
 	protected function sanitize_optimization_level( $optimization_level ) {
 		if ( ! is_numeric( $optimization_level ) ) {
+			if ( get_imagify_option( 'lossless' ) ) {
+				return 0;
+			}
+
 			return get_imagify_option( 'optimization_level' );
 		}
 

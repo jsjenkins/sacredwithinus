@@ -1,6 +1,31 @@
 <?php
 require_once(dirname(__FILE__) . '/wfConfig.php');
 class wfUtils {
+	const DEFAULT_MAX_SERIALIZED_INPUT_LENGTH = 65536;
+	const DEFAULT_MAX_SERIALIZED_ARRAY_LENGTH = 1024;
+	const DEFAULT_MAX_SERIALIZED_ARRAY_DEPTH = 5;
+	
+	//Fields for wfUtils::parseCallable
+	const CALLABLE_CLASS = 'class';
+	const CALLABLE_FUNCTION = 'function';
+	const CALLABLE_IS_INSTANCE = 'instance';
+	const CALLABLE_IS_CLOSURE = 'closure';
+	const CALLABLE_IS_INVOKABLE = 'invokable';
+	
+	//Flags for wfUtils::parse_version
+	const VERSION_MAJOR = 'major';
+	const VERSION_MINOR = 'minor';
+	const VERSION_PATCH = 'patch';
+	const VERSION_PRE_RELEASE = 'pre-release';
+	const VERSION_BUILD = 'build';
+	
+	//Flags for array_diff_assoc
+	const ARRAY_DIFF_ORDERED_ARRAYS = 1; //When specified, non-associative arrays are treated as if the ordering matters. The default is to ignore the ordering and only care about the content
+	
+	//Constants for wfUtils::serverIPs
+	const SERVER_ADDR_CACHE_TTL =  86400;
+	const SERVER_ADDR_REFRESH_TTL =  14400;
+	
 	private static $isWindows = false;
 	public static $scanLockFH = false;
 	private static $lastErrorReporting = false;
@@ -156,6 +181,402 @@ class wfUtils {
 			return $matches[1];
 		}
 		return $version;
+	}
+	
+	/**
+	 * Safe unserialize() replacement
+	 * - accepts a strict subset of PHP's native serialized representation
+	 * - does not unserialize objects
+	 *
+	 * @param string $str
+	 * @return mixed
+	 */
+	public static function _safe_unserialize($str, $limit_input_length = self::DEFAULT_MAX_SERIALIZED_INPUT_LENGTH, $limit_array_length = self::DEFAULT_MAX_SERIALIZED_ARRAY_LENGTH, $limit_array_depth = self::DEFAULT_MAX_SERIALIZED_ARRAY_DEPTH) {
+		if (empty($str) || !is_string($str)) { return false; }
+		if (strlen($str) > $limit_input_length) { return false; }
+		if (!is_serialized($str)) { return false; }
+		
+		$stack = array();
+		$expected = array();
+		
+		/*
+		 * states:
+		 *   0 - initial state, expecting a single value or array
+		 *   1 - terminal state
+		 *   2 - in array, expecting end of array or a key
+		 *   3 - in array, expecting value or another array
+		 */
+		$state = 0;
+		while ($state != 1) {
+			$type = isset($str[0]) ? $str[0] : '';
+			if ($type == '}') {
+				$str = substr($str, 1);
+			} else if ($type == 'N' && $str[1] == ';') {
+				$value = null;
+				$str = substr($str, 2);
+			} else if ($type == 'b' && preg_match('/^b:([01]);/', $str, $matches)) {
+				$value = $matches[1] == '1' ? true : false;
+				$str = substr($str, 4);
+			} else if ($type == 'i' && preg_match('/^i:(-?[0-9]+);(.*)/s', $str, $matches)) {
+				$value = (int) $matches[1];
+				$str = $matches[2];
+			} else if ($type == 'd' && preg_match('/^d:(-?[0-9]+\.?[0-9]*(E[+-][0-9]+)?);(.*)/s', $str, $matches)) {
+				$value = (float) $matches[1];
+				$str = $matches[3];
+			} else if ($type == 's' && preg_match('/^s:([0-9]+):"(.*)/s', $str, $matches) && substr($matches[2], (int) $matches[1], 2) == '";') {
+				$value = substr($matches[2], 0, (int) $matches[1]);
+				$str = substr($matches[2], (int) $matches[1] + 2);
+			} else if ($type == 'a' && preg_match('/^a:([0-9]+):{(.*)/s', $str, $matches) && $matches[1] < $limit_array_length) {
+				$expectedLength = (int) $matches[1];
+				$str = $matches[2];
+			} else {
+				// object or unknown/malformed type
+				return false;
+			}
+			
+			switch ($state) {
+				case 3: // in array, expecting value or another array
+					if ($type == 'a') {
+						if (count($stack) >= $limit_array_depth) { return false; }
+						
+						$stack[] = &$list;
+						$list[$key] = array(); //$key is set in state 2
+						$list = &$list[$key];
+						$expected[] = $expectedLength;
+						$state = 2;
+						break;
+					}
+					if ($type != '}') {
+						$list[$key] = $value;
+						$state = 2;
+						break;
+					}
+					
+					// missing array value
+					return false;
+				
+				case 2: // in array, expecting end of array or a key
+					if ($type == '}') {
+						if (count($list) < end($expected)) {
+							// array size less than expected
+							return false;
+						}
+						
+						unset($list);
+						$list = &$stack[count($stack) - 1];
+						array_pop($stack);
+						
+						// go to terminal state if we're at the end of the root array
+						array_pop($expected);
+						if (count($expected) == 0) {
+							$state = 1;
+						}
+						break;
+					}
+					if ($type == 'i' || $type == 's') {
+						if (count($list) >= $limit_array_length) { return false; }
+						if (count($list) >= end($expected)) { return false; }
+						
+						$key = $value;
+						$state = 3;
+						break;
+					}
+					
+					// illegal array index type
+					return false;
+				
+				case 0: // expecting array or value
+					if ($type == 'a') {
+						if (count($stack) >= $limit_array_depth) { return false; }
+						
+						$data = array();
+						$list = &$data;
+						$expected[] = $expectedLength;
+						$state = 2;
+						break;
+					}
+					if ($type != '}') {
+						$data = $value;
+						$state = 1;
+						break;
+					}
+					
+					// not in array
+					return false;
+			}
+		}
+		
+		if (!empty($str)) { return false; } // trailing data in input
+		return $data;
+	}
+	
+	/**
+	 * Wrapper for _safe_unserialize() that handles multibyte encoding issues
+	 *
+	 * @param string $str
+	 * @return mixed
+	 */
+	public static function safe_unserialize($str) {
+		// ensure we use the byte count for strings even when strlen() is overloaded by mb_strlen()
+		if (function_exists('mb_internal_encoding') && (((int) ini_get('mbstring.func_overload')) & 2)) { // phpcs:ignore PHPCompatibility.IniDirectives.RemovedIniDirectives.mbstring_func_overloadDeprecated
+			$mbIntEnc = mb_internal_encoding();
+			mb_internal_encoding('ASCII');
+		}
+		
+		$out = self::_safe_unserialize($str);
+		
+		if (isset($mbIntEnc)) {
+			mb_internal_encoding($mbIntEnc);
+		}
+		return $out;
+	}
+	
+	/**
+	 * If $value is not null, this returns $value unchanged. Otherwise it returns one of two values:
+	 * 1. If $orCallable is a valid callable, it returns the result
+	 * 2. Otherwise it returns $default 
+	 * 
+	 * @param mixed $value
+	 * @param mixed $default
+	 * @param callable|null $orCallable
+	 * @return mixed
+	 */
+	public static function ifnull($value, $default = '', $orCallable = null) {
+		if (is_null($value)) {
+			if (is_callable($orCallable)) {
+				return $orCallable();
+			}
+			return $default;
+		}
+		return $value;
+	}
+	
+	/**
+	 * Returns a diff on the passed arrays. The behavior varies based on the content of the arrays themselves and any
+	 * flags passed. The resulting structure will be some variant of:
+	 * 
+	 * ['added' => [...], 'removed' => [...]]
+	 * 
+	 * 1. If both $a and $b are non-associative arrays, the result will not include keys in `added` and `removed`.
+	 * 2. If either or both of $a and $b are associative arrays, the result will include keys that are also factored
+	 *    into the comparison.
+	 * 
+	 * @param array $a
+	 * @param array $b
+	 * @param int $flags
+	 * @return array
+	 */
+	public static function array_diff($a, $b, $flags = 0) {
+		$result = array();
+		if (!self::is_assoc($a) && !self::is_assoc($b)) {
+			$result['added'] = array_diff($b, $a);
+			$result['removed'] = array_diff($a, $b);
+		}
+		else {
+			$result['added'] = self::array_diff_assoc($b, $a);
+			$result['removed'] = self::array_diff_assoc($a, $b);
+		}
+		return $result;
+	}
+	
+	/**
+	 * Improved version of array_diff_assoc that handles multidimensional arrays. The resulting array will contain all 
+	 * key/values from $a that are not present in $b.
+	 * 
+	 * For nested arrays, the behavior for inequality is this:
+	 * 	- If $a[key] contains values $b[key] does not, an array of those missing values is set for `key` in the result
+	 * 	- If $b[key] contains values $a[key] does not, `key` is not present in the result
+	 * 
+	 * @param array $a
+	 * @param array $b
+	 * @param int $flags
+	 * @return array
+	 */
+	public static function array_diff_assoc($a, $b, $flags = 0) {
+		if (!($flags & self::ARRAY_DIFF_ORDERED_ARRAYS)) { //Treat $a and $b as unordered if they're non-associative
+			if (!self::is_assoc($a) && !self::is_assoc($b)) {
+				sort($a);
+				sort($b);
+			}
+		}
+		
+		$result = array();
+		foreach ($a as $k => $v) {
+			if (array_key_exists($k, $b)) {
+				if ($a[$k] == $b[$k]) {
+					continue;
+				}
+				
+				if (is_array($a[$k]) && is_array($b[$k])) {
+					$diff = self::array_diff($a[$k], $b[$k]);
+					if (!empty($diff['removed'])) {
+						$result[$k] = $diff['removed'];
+					}
+					
+					continue;
+				}
+			}
+			
+			$result[$k] = $v;
+		}
+		return $result;
+	}
+	
+	/**
+	 * Returns the items from $array whose keys are in $keys.
+	 * 
+	 * @param array $array
+	 * @param array|string $keys
+	 * @param bool $single Return single-value as-is instead of a one-element array.
+	 * @param mixed|null $default Value to return when $single is true and nothing is found.
+	 * @return array|mixed
+	 */
+	public static function array_choose($array, $keys, $single = false, $default = null) {
+		if (!is_array($keys)) {
+			$keys = array($keys);
+		}
+		
+		if (is_object($array) && (
+			$array instanceof ArrayAccess ||
+				$array instanceof Traversable ||
+				$array instanceof Serializable ||
+				$array instanceof Countable)) {
+			$array = (array) $array;
+		}
+		
+		$matches = array_filter($array, function($k) use ($keys) {
+			return in_array($k, $keys);
+		}, ARRAY_FILTER_USE_KEY);
+		if ($single) {
+			$key = self::array_first($keys);
+			if ($key !== null && isset($matches[$key])) {
+				return $matches[$key];
+			}
+			
+			return $default;
+		}
+		return $matches;
+	}
+	
+	/**
+	 * Convenience function for `array_choose` in its single return value mode for better code readability.
+	 * 
+	 * @param array $array
+	 * @param string $key
+	 * @param mixed|null $default
+	 * @return mixed
+	 */
+	public static function array_get($array, $key, $default = null) {
+		return self::array_choose($array, $key, true, $default);
+	}
+	
+	/**
+	 * Polyfill for array_key_first.
+	 * 
+	 * @param array $array
+	 * @return mixed|null
+	 */
+	public static function array_key_first($array) {
+		if (function_exists('array_key_first')) {
+			return array_key_first($array);
+		}
+		
+		if (!count($array)) {
+			return null;
+		}
+		
+		$keys = array_keys($array);
+		return $keys[0];
+	}
+	
+	/**
+	 * Polyfill for array_key_last.
+	 *
+	 * @param array $array
+	 * @return mixed|null
+	 */
+	public static function array_key_last($array) {
+		if (function_exists('array_key_last')) {
+			return array_key_last($array);
+		}
+		
+		if (!count($array)) {
+			return null;
+		}
+		
+		$keys = array_keys($array);
+		return $keys[count($keys) - 1];
+	}
+	
+	/**
+	 * Performs an array_map but then converts the response into an associative array. $callable is expected to return
+	 * [$key => $value] rather than just $value as a normal array_map call would. The resulting array will be as if each
+	 * were merged in, preserving the $value under $key. Each $key _should_ generally be unique, but if there are 
+	 * duplicates, the last key/value pair mapped for a given $key will be the final value in the array.
+	 * 
+	 * @param callable $callable
+	 * @param array $array
+	 * @return array
+	 */
+	public static function array_kmap($callable, $array) {
+		$intermediate = array_map($callable, $array);
+		$result = array();
+		foreach ($intermediate as $i) { //Can't use array_merge because it discards numerical keys
+			$k = self::array_key_first($i);
+			$v = $i[$k];
+			$result[$k] = $v;
+		}
+		return $result;
+	}
+	
+	
+	/**
+	 * Returns whether or not $a is an associative-array. It is considered associative only when the array keys are not
+	 * sequential integers starting at 0.
+	 * 
+	 * @param array $a
+	 * @return bool
+	 */
+	public static function is_assoc($a) {
+		if (!is_array($a)) { return false; }
+		for ($i = 0; $i < count($a); $i++) {
+			if (!isset($a[$i])) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/**
+	 * Returns the raw HTTP POST body if possible. This is functionally identical to the implementation in wfWAFUtils 
+	 * but present here to avoid complications with nested install WAF optimization. 
+	 * 
+	 * @return string
+	 */
+	public static function rawPOSTBody() {
+		// phpcs:ignore PHPCompatibility.Variables.RemovedPredefinedGlobalVariables.http_raw_post_dataDeprecatedRemoved
+		global $HTTP_RAW_POST_DATA;
+		// phpcs:ignore PHPCompatibility.Variables.RemovedPredefinedGlobalVariables.http_raw_post_dataDeprecatedRemoved
+		if (empty($HTTP_RAW_POST_DATA)) { //Defined if always_populate_raw_post_data is on, PHP < 7, and the encoding type is not multipart/form-data
+			$avoidPHPInput = wfWAFConfig::get('avoid_php_input', false);
+			if ($avoidPHPInput) { //Some custom PHP builds break reading from php://input
+				//Reconstruct the best possible approximation of it from $_POST if populated -- won't help JSON or other raw payloads
+				$data = http_build_query($_POST, '', '&');
+			}
+			else {
+				$data = file_get_contents('php://input'); //Available if the encoding type is not multipart/form-data; it can only be read once prior to PHP 5.6 so we save it in $HTTP_RAW_POST_DATA for WP Core and others
+				
+				//For our purposes, we don't currently need the raw POST body if it's multipart/form-data since the data will be in $_POST/$_FILES. If we did, we could reconstruct the body here.
+				
+				// phpcs:ignore PHPCompatibility.Variables.RemovedPredefinedGlobalVariables.http_raw_post_dataDeprecatedRemoved
+				$HTTP_RAW_POST_DATA = $data;
+			}
+		}
+		else {
+			// phpcs:ignore PHPCompatibility.Variables.RemovedPredefinedGlobalVariables.http_raw_post_dataDeprecatedRemoved
+			$data =& $HTTP_RAW_POST_DATA;
+		}
+		return $data;
 	}
 	
 	/**
@@ -477,8 +898,14 @@ class wfUtils {
 	 * @return string
 	 */
 	public static function inet_aton($ip) {
-		$ip = preg_replace('/(?<=^|\.)0+([1-9])/', '$1', $ip);
-		return sprintf("%u", ip2long($ip));
+		try {
+			$ip = preg_replace('/(?<=^|\.)0+([1-9])/', '$1', $ip);
+			return sprintf("%u", ip2long($ip));
+		}
+		catch (Throwable $t) {
+			//Ignore -- fall through to default
+		}
+		return '0';
 	}
 
 	/**
@@ -502,9 +929,14 @@ class wfUtils {
 	 * @return string
 	 */
 	public static function inet_pton($ip) {
-		// convert the 4 char IPv4 to IPv6 mapped version.
-		$pton = str_pad(self::hasIPv6Support() ? @inet_pton($ip) : self::_inet_pton($ip), 16,
-			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00", STR_PAD_LEFT);
+		$default = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\x00\x00\x00\x00";
+		try {
+			// convert the 4 char IPv4 to IPv6 mapped version.
+			$pton = str_pad(self::hasIPv6Support() ? @inet_pton($ip) : self::_inet_pton($ip), 16, $default, STR_PAD_LEFT);
+		}
+		catch (Throwable $t) {
+			$pton = $default;
+		}
 		return $pton;
 	}
 
@@ -611,7 +1043,11 @@ class wfUtils {
 	 * @return bool
 	 */
 	public static function hasIPv6Support() {
-		return defined('AF_INET6');
+		static $hasSupport = null;
+		if ($hasSupport === null) {
+			$hasSupport = defined('AF_INET6') && self::funcEnabled('inet_ntop') && self::funcEnabled('inet_pton');
+		}
+		return $hasSupport;
 	}
 
 	public static function hasLoginCookie(){
@@ -649,6 +1085,7 @@ class wfUtils {
 	/**
 	 * Converts a truthy value to a boolean, checking in this order:
 	 * - already a boolean
+	 * - is null => false
 	 * - numeric (0 => false, otherwise true)
 	 * - 'false', 'f', 'no', 'n', or 'off' => false
 	 * - 'true', 't', 'yes', 'y', or 'on' => true
@@ -660,6 +1097,10 @@ class wfUtils {
 	public static function truthyToBoolean($value) {
 		if ($value === true || $value === false) {
 			return $value;
+		}
+		
+		if (is_null($value)) {
+			return false;
 		}
 		
 		if (is_numeric($value)) {
@@ -712,12 +1153,15 @@ class wfUtils {
 	 * Returns an array containing all whitelisted service IPs/ranges. The returned array is grouped by service
 	 * tag: array('service1' => array('range1', 'range2', range3', ...), ...)
 	 * 
+	 * @param array|null $whitelistedServices If provided, use this service list for enabled/disabled resolution
 	 * @return array
 	 */
-	public static function whitelistedServiceIPs() {
+	public static function whitelistedServiceIPs($whitelistedServices = null) {
 		$result = array();
 		$whitelistPresets = self::whitelistPresets();
-		$whitelistedServices = wfConfig::getJSON('whitelistedServices', array());
+		if ($whitelistedServices === null) {
+			$whitelistedServices = wfConfig::getJSON('whitelistedServices', array());
+		}
 		foreach ($whitelistPresets as $tag => $preset) {
 			if (!isset($preset['n'])) { //Just an array of IPs/ranges
 				$result[$tag] = $preset;
@@ -886,7 +1330,7 @@ class wfUtils {
 			}
 			$skipToNext = false;
 			if ($trustedProxies === null) {
-				$trustedProxies = explode("\n", wfConfig::get('howGetIPs_trusted_proxies', ''));
+				$trustedProxies = self::unifiedTrustedProxies();
 			}
 			foreach(array(',', ' ', "\t") as $char){
 				if(strpos($item, $char) !== false){
@@ -944,6 +1388,29 @@ class wfUtils {
 			return false;
 		}
 	}
+	
+	/**
+	 * Returns an array of all trusted proxies, combining both the user-entered ones and those from the selected preset.
+	 * 
+	 * @return string[]
+	 */
+	public static function unifiedTrustedProxies() {
+		$trustedProxies = explode("\n", wfConfig::get('howGetIPs_trusted_proxies', ''));
+		
+		$preset = wfConfig::get('howGetIPs_trusted_proxy_preset');
+		$presets = wfConfig::getJSON('ipResolutionList', array());
+		if (is_array($presets) && isset($presets[$preset])) {
+			$testIPs = array_merge($presets[$preset]['ipv4'], $presets[$preset]['ipv6']);
+			foreach ($testIPs as $val) {
+				if (strlen($val) > 0) {
+					if (wfUtils::isValidIP($val) || wfUtils::isValidCIDRRange($val)) {
+						$trustedProxies[] = $val;
+					}
+				}
+			}
+		}
+		return $trustedProxies;
+	}
 
 	/**
 	 * @param string $ip
@@ -998,9 +1465,13 @@ class wfUtils {
 					$cnameRaw = @dns_get_record($host, DNS_CNAME);
 					$cnames = array();
 					$cnamesTargets = array();
-					if ($cnameRaw) {
+					if ($cnameRaw && is_array($cnameRaw)) {
 						foreach ($cnameRaw as $elem) {
-							if ($elem['host'] == $host) {
+							if (is_array($elem) && 
+								array_key_exists('host', $elem) && 
+								array_key_exists('target', $elem) && 
+								$elem['host'] == $host
+							) {
 								$cnames[] = $elem;
 								$cnamesTargets[] = $elem['target'];
 							}
@@ -1009,9 +1480,14 @@ class wfUtils {
 					
 					$aRaw = @dns_get_record($host, DNS_A);
 					$a = array();
-					if ($aRaw) {
+					if ($aRaw && is_array($aRaw)) {
 						foreach ($aRaw as $elem) {
-							if ($elem['host'] == $host || in_array($elem['host'], $cnamesTargets)) {
+							if (is_array($elem) && 
+								array_key_exists('host', $elem) &&
+								array_key_exists('ttl', $elem) &&
+								array_key_exists('ip', $elem) &&
+								($elem['host'] == $host || in_array($elem['host'], $cnamesTargets))
+							) {
 								$a[] = $elem;
 							}
 						}
@@ -1026,11 +1502,79 @@ class wfUtils {
 			}
 		}
 		
-		if (isset($_SERVER['SERVER_ADDR']) && wfUtils::isValidIP($_SERVER['SERVER_ADDR'])) {
-			$serverIPs[] = $_SERVER['SERVER_ADDR'];
+		/*
+		 * This segment governs the SERVER_ADDR cache. We cache all seen values for the TTL defined by 
+		 * `wfUtils::SERVER_ADDR_CACHE_TTL` to account for varying IPs from load balancers. We do not refresh
+		 * the timestamp on a repeat address until it's at least `wfUtils::SERVER_ADDR_REFRESH_TTL` old unless we're
+		 * going to save a change anyway. 
+		 */
+		
+		$recentServerAddr = wfConfig::get_ser('recentServerAddr');
+		$dirtyServerAddr = false;
+		$containsCurrentServerAddr = false;
+		$recents = array();
+		if (!is_array($recentServerAddr)) {
+			$recentServerAddr = array();
 		}
 		
-		$serverIPs = array_unique($serverIPs);
+		$recentServerAddr = array_filter($recentServerAddr, function($time, $addr) use (&$dirtyServerAddr, &$containsCurrentServerAddr, &$recents) {
+			if (!wfUtils::isValidIP($addr)) {
+				$dirtyServerAddr = true;
+				return false;
+			}
+			
+			if ($time < time() - self::SERVER_ADDR_CACHE_TTL) {
+				$dirtyServerAddr = true;
+				return false;
+			}
+			
+			if (isset($_SERVER['SERVER_ADDR']) && $addr == $_SERVER['SERVER_ADDR']) {
+				$containsCurrentServerAddr = true;
+				if ($time < time() - self::SERVER_ADDR_REFRESH_TTL) {
+					$dirtyServerAddr = true;
+				}
+				return false; //Filtering out the current one now so it can be re-added later with a current timestamp
+			}
+			$recents[] = $addr;
+			return true;
+		}, ARRAY_FILTER_USE_BOTH);
+		
+		if (isset($_SERVER['SERVER_ADDR']) && wfUtils::isValidIP($_SERVER['SERVER_ADDR'])) {
+			$recentServerAddr[$_SERVER['SERVER_ADDR']] = time();
+			$recents[] = $_SERVER['SERVER_ADDR'];
+			$dirtyServerAddr = $dirtyServerAddr || !$containsCurrentServerAddr;
+		}
+			
+		if ($dirtyServerAddr) {
+			//Check for state change from another request, merge as needed, then save our update
+			$locked = wfConfig::createLock('recentServerAddr');
+			if ($locked) {
+				$currentState = wfConfig::get_ser('recentServerAddr', array(), true, false);
+				if (is_array($currentState)) {
+					foreach ($currentState as $addr => $time) {
+						if (!wfUtils::isValidIP($addr)) {
+							continue;
+						}
+						
+						if (array_key_exists($addr, $recentServerAddr)) {
+							$recentServerAddr[$addr] = max($time, $recentServerAddr[$addr]);
+						}
+						else if ($time > time() - self::SERVER_ADDR_CACHE_TTL) {
+							$recentServerAddr[$addr] = $time;
+							$recents[] = $addr;
+						}
+					}
+				}
+				
+				wfConfig::set_ser('recentServerAddr', $recentServerAddr);
+				wfConfig::releaseLock('recentServerAddr');
+			}
+		}
+		
+		sort($recents);
+		$serverIPs = array_merge($serverIPs, $recents);
+		
+		$serverIPs = array_values(array_unique($serverIPs));
 		$cachedServerIPs = $serverIPs;
 		return $serverIPs;
 	}
@@ -1162,6 +1706,10 @@ class wfUtils {
 		return true;
 	}
 	public static function isValidEmail($email, $strict = false) {
+		if (empty($email)) {
+			return false;
+		}
+		
 		//We don't default to strict, full validation because poorly-configured servers can crash due to the regex PHP uses in filter_var($email, FILTER_VALIDATE_EMAIL)
 		if ($strict) {
 			return (filter_var($email, FILTER_VALIDATE_EMAIL) !== false);
@@ -1240,6 +1788,85 @@ class wfUtils {
 			return $wp_version;
 		}
 	}
+	
+	public static function parse_version($version, $component = null) {
+		$major = 0;
+		$minor = 0;
+		$patch = 0;
+		$prerelease = '';
+		$build = '';
+		
+		if (preg_match('/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/', $version, $matches)) { //semver
+			$major = $matches[1];
+			$minor = $matches[2];
+			$patch = $matches[3];
+			
+			if (preg_match('/^([^\+]+)\+(.*)$/', $version, $matches)) {
+				$version = $matches[1];
+				$build = $matches[2];
+			}
+			
+			if (preg_match('/^([^\-]+)\-(.*)$/', $version, $matches)) {
+				$version = $matches[1];
+				$prerelease = $matches[2];
+			}
+		}
+		else { //Parse as "PHP-standardized" (see version_compare docs: "The function first replaces _, - and + with a dot . in the version strings and also inserts dots . before and after any non number so that for example '4.3.2RC1' becomes '4.3.2.RC.1'.")
+			$version = trim(preg_replace('/\.\.+/', '.', preg_replace('/([^0-9\.]+)/', '.$1.', preg_replace('/[_\-\+]+/', '.', $version))), '.');
+			$components = explode('.', $version);
+			$i = 0;
+			if (isset($components[$i]) && is_numeric($components[$i])) { $major = $components[$i]; $i++; }
+			if (isset($components[$i]) && is_numeric($components[$i])) { $minor = $components[$i]; $i++; }
+			if (isset($components[$i]) && is_numeric($components[$i])) { $patch = $components[$i]; $i++; }
+			while (isset($components[$i]) && is_numeric($components[$i])) {
+				if (!empty($build)) {
+					$build .= '.';
+				}
+				$build .= $components[$i];
+				$i++;
+			}
+			while (isset($components[$i])) {
+				if (!empty($prerelease)) {
+					$prerelease .= '.';
+				}
+				
+				if (preg_match('/^(?:dev|alpha|a|beta|b|rc|#|pl|p)$/i', $components[$i])) {
+					$prerelease .= strtolower($components[$i]);
+					if (isset($components[$i + 1])) {
+						if (!preg_match('/^(?:a|b|rc|#|pl|p)$/i', $components[$i])) {
+							$prerelease .= '-';
+						}
+						$i++;
+					}
+				}
+				
+				$prerelease .= $components[$i];
+				$i++;
+			}
+		}
+		
+		$version = array(
+			self::VERSION_MAJOR => $major,
+			self::VERSION_MINOR => $minor,
+			self::VERSION_PATCH => $patch,
+			self::VERSION_PRE_RELEASE => $prerelease,
+			self::VERSION_BUILD => $build,
+		);
+		
+		$version = array_filter($version, function($v) {
+			return $v !== '';
+		});
+		
+		if ($component === null) {
+			return $version;
+		}
+		else if (isset($version[$component])) {
+			return $version[$component];
+		}
+		
+		return null;
+	}
+	
 	public static function isAdminPageMU(){
 		if(preg_match('/^[\/a-zA-Z0-9\-\_\s\+\~\!\^\.]*\/wp-admin\/network\//', $_SERVER['REQUEST_URI'])){
 			return true;
@@ -1271,16 +1898,37 @@ class wfUtils {
 		}
 		return $max;
 	}
-	public static function requestMaxMemory(){
-		if(wfConfig::get('maxMem', false) && (int) wfConfig::get('maxMem') > 0){
-			$maxMem = (int) wfConfig::get('maxMem');
-		} else {
+	
+	/**
+	 * Returns the current PHP memory limit in bytes.
+	 * 
+	 * Note: This is duplicated in wordfence.php to avoid needing to include this class early.
+	 * 
+	 * @return int
+	 */
+	public static function memoryLimit() {
+		$maxMemory = ini_get('memory_limit');
+		if (!(is_string($maxMemory) || is_numeric($maxMemory)) || !preg_match('/^\s*\d+[GMK]?\s*$/i', $maxMemory)) { $maxMemory = '128M'; } //Invalid or unreadable value, default to our minimum
+		$last = strtolower(substr($maxMemory, -1));
+		$maxMemory = (int) $maxMemory;
+		
+		if ($last == 'g') { $maxMemory = $maxMemory * 1024 * 1024 * 1024; }
+		else if ($last == 'm') { $maxMemory = $maxMemory * 1024 * 1024; }
+		else if ($last == 'k') { $maxMemory = $maxMemory * 1024; }
+		return floor($maxMemory);
+	}
+	
+	public static function requestMaxMemory() {
+		$maxMem = wfConfig::getInt('maxMem', 256);
+		if ($maxMem <= 0) {
 			$maxMem = 256;
 		}
-		if( function_exists('memory_get_usage') && ( (int) @ini_get('memory_limit') < $maxMem ) ){
+		
+		if (self::funcEnabled('memory_get_usage') && self::memoryLimit() < ($maxMem * 1024 * 1024)){
 			self::iniSet('memory_limit', $maxMem . 'M');
 		}
 	}
+	
 	public static function isAdmin($user = false){
 		if($user){
 			if(is_multisite()){
@@ -1338,42 +1986,12 @@ class wfUtils {
 		return self::$isWindows == 'yes' ? true : false;
 	}
 	public static function cleanupOneEntryPerLine($string) {
+		$string = !is_string($string) ? '' : $string;
 		$string = str_replace(",", "\n", $string); // fix old format
 		return implode("\n", array_unique(array_filter(array_map('trim', explode("\n", $string)))));
 	}
-	public static function getScanFileError() {
-		$fileTime = wfConfig::get('scanFileProcessing');
-		if (!$fileTime) {
-			return;
-		}
-		list($file, $time) =  unserialize($fileTime);
-		if ($time+10 < time()) {
-			$add = true;
-			$excludePatterns = wordfenceScanner::getExcludeFilePattern(wordfenceScanner::EXCLUSION_PATTERNS_USER);
-			if ($excludePatterns) {
-				foreach ($excludePatterns as $pattern) {
-					if (preg_match($pattern, $file)) {
-						$add = false;
-						break;
-					}
-				}
-			}
-			
-			if ($add) {
-				$files = wfConfig::get('scan_exclude') . "\n" . $file;
-				wfConfig::set('scan_exclude', self::cleanupOneEntryPerLine($files));
-			}
-			
-			self::endProcessingFile();
-		}
-	}
 
-	public static function beginProcessingFile($file) {
-		wfConfig::set('scanFileProcessing', serialize(array($file, time())));
-	}
-
-	public static function endProcessingFile() {
-		wfConfig::set('scanFileProcessing', null);
+	public static function afterProcessingFile() {
 		if (wfScanner::shared()->useLowResourceScanning()) {
 			usleep(10000); //10 ms
 		}
@@ -1423,11 +2041,13 @@ class wfUtils {
 				$ip_printable = $IP;
 				$ip_bin = wfUtils::inet_pton($IP);
 			}
-
-			$row = $db->querySingleRec("select IP, ctime, failed, city, region, countryName, countryCode, lat, lon, unix_timestamp() - ctime as age from " . $locsTable . " where IP=%s", $ip_bin);
+			
+			$ipHex = wfDB::binaryValueToSQLHex($ip_bin);
+			$row = $db->querySingleRec("select IP, ctime, failed, city, region, countryName, countryCode, lat, lon, unix_timestamp() - ctime as age from " . $locsTable . " where IP={$ipHex}");
 			if($row){
 				if($row['age'] > WORDFENCE_MAX_IPLOC_AGE){
-					$db->queryWrite("delete from " . $locsTable . " where IP=%s", $row['IP']);
+					$ipHex = wfDB::binaryValueToSQLHex($row['IP']);
+					$db->queryWrite("delete from " . $locsTable . " where IP={$ipHex}");
 				} else {
 					if($row['failed'] == 1){
 						$IPLocs[$ip_printable] = false;
@@ -1443,46 +2063,68 @@ class wfUtils {
 			}
 		}
 		if(sizeof($toResolve) > 0){
-			$api = new wfAPI(wfConfig::get('apiKey'), wfUtils::getWPVersion());
-			try {
-				$freshIPs = $api->call('resolve_ips', array(), array(
-					'ips' => implode(',', $toResolve)
-					));
-				if(is_array($freshIPs)){
-					foreach($freshIPs as $IP => $value){
-						$IP_bin = wfUtils::inet_pton($IP);
-						if($value == 'failed'){
-							$db->queryWrite("insert IGNORE into " . $locsTable . " (IP, ctime, failed) values (%s, unix_timestamp(), 1)", $IP_bin);
-							$IPLocs[$IP] = false;
-						} else if(is_array($value)){
-							for($i = 0; $i <= 5; $i++){
-								//Prevent warnings in debug mode about uninitialized values
-								if(! isset($value[$i])){ $value[$i] = ''; }
-							}
-							$db->queryWrite("insert IGNORE into " . $locsTable . " (IP, ctime, failed, city, region, countryName, countryCode, lat, lon) values (%s, unix_timestamp(), 0, '%s', '%s', '%s', '%s', %s, %s)",
-								$IP_bin,
-								$value[3], //city
-								$value[2], //region
-								$value[1], //countryName
-								$value[0],//countryCode
-								$value[4],//lat
-								$value[5]//lon
-								);
-							$IPLocs[$IP] = array(
-								'IP' => $IP,
-								'city' => $value[3],
-								'region' => wfUtils::shouldDisplayRegion($value[1]) ? $value[2] : '',
-								'countryName' => $value[1],
-								'countryCode' => $value[0],
-								'lat' => $value[4],
-								'lon' => $value[5]
-								);
+			if (wfConfig::get('enableRemoteIpLookup', true)) {
+				$api = new wfAPI(wfConfig::get('apiKey'), wfUtils::getWPVersion());
+				try {
+					$freshIPs = $api->call('resolve_ips', array(), array(
+						'ips' => implode(',', $toResolve)
+						));
+				} catch(Exception $e){
+					wordfence::status(2, 'error', sprintf(/* translators: Error message. */ __("Call to Wordfence API to resolve IPs failed: %s", 'wordfence'), $e->getMessage()));
+					return array();
+				}
+			}
+			else {
+				self::requireIpLocator();
+				$locator = wfIpLocator::getInstance();
+				$freshIPs = array();
+				$locale = get_locale();
+				foreach ($toResolve as $ip) {
+					$record = $locator->locate($ip);
+					if ($record !== null) {
+						$countryCode = $record->getCountryCode();
+						if ($countryCode !== null) {
+							$countryName = $record->getCountryName($locale);
+							if ($countryName === null)
+								$countryName = $countryCode;
+							$freshIPs[$ip] = array($countryCode, $countryName);
+							continue;
 						}
 					}
+					$freshIPs[$ip] = 'failed';
 				}
-			} catch(Exception $e){
-				wordfence::status(2, 'error', sprintf(/* translators: Error message. */ __("Call to Wordfence API to resolve IPs failed: %s", 'wordfence'), $e->getMessage()));
-				return array();
+			}
+			if(is_array($freshIPs)){
+				foreach($freshIPs as $IP => $value){
+					$IP_bin = wfUtils::inet_pton($IP);
+					$ipHex = wfDB::binaryValueToSQLHex($IP_bin);
+					if($value == 'failed'){
+						$db->queryWrite("insert IGNORE into " . $locsTable . " (IP, ctime, failed) values ({$ipHex}, unix_timestamp(), 1)");
+						$IPLocs[$IP] = false;
+					} else if(is_array($value)){
+						for($i = 0; $i <= 5; $i++){
+							//Prevent warnings in debug mode about uninitialized values
+							if(! isset($value[$i])){ $value[$i] = ''; }
+						}
+						$db->queryWrite("insert IGNORE into " . $locsTable . " (IP, ctime, failed, city, region, countryName, countryCode, lat, lon) values ({$ipHex}, unix_timestamp(), 0, '%s', '%s', '%s', '%s', %s, %s)",
+							$value[3], //city
+							$value[2], //region
+							$value[1], //countryName
+							$value[0],//countryCode
+							$value[4],//lat
+							$value[5]//lon
+							);
+						$IPLocs[$IP] = array(
+							'IP' => $IP,
+							'city' => $value[3],
+							'region' => wfUtils::shouldDisplayRegion($value[1]) ? $value[2] : '',
+							'countryName' => $value[1],
+							'countryCode' => $value[0],
+							'lat' => $value[4],
+							'lon' => $value[5]
+							);
+					}
+				}
 			}
 		}
 		return $IPLocs;
@@ -1497,7 +2139,8 @@ class wfUtils {
 		$db = new wfDB();
 		$reverseTable = wfDB::networkTable('wfReverseCache');
 		$IPn = wfUtils::inet_pton($IP);
-		$host = $db->querySingle("select host from " . $reverseTable . " where IP=%s and unix_timestamp() - lastUpdate < %d", $IPn, WORDFENCE_REVERSE_LOOKUP_CACHE_TIME);
+		$ipHex = wfDB::binaryValueToSQLHex($IPn);
+		$host = $db->querySingle("select host from " . $reverseTable . " where IP={$ipHex} and unix_timestamp() - lastUpdate < %d", WORDFENCE_REVERSE_LOOKUP_CACHE_TIME);
 		if (!$host) {
 			// This function works for IPv4 or IPv6
 			if (function_exists('gethostbyaddr')) {
@@ -1513,8 +2156,8 @@ class wfUtils {
 
 				if ($ptr && function_exists('dns_get_record')) {
 					$host = @dns_get_record($ptr, DNS_PTR);
-					if ($host) {
-						$host = $host[0]['target'];
+					if ($host && is_array($host) && count($host)) {
+						$host = wfUtils::array_get($host[0], 'target');
 					}
 				}
 			}
@@ -1522,7 +2165,7 @@ class wfUtils {
 			if (!$host) {
 				$host = 'NONE';
 			}
-			$db->queryWrite("insert into " . $reverseTable . " (IP, host, lastUpdate) values (%s, '%s', unix_timestamp()) ON DUPLICATE KEY UPDATE host='%s', lastUpdate=unix_timestamp()", $IPn, $host, $host);
+			$db->queryWrite("insert into " . $reverseTable . " (IP, host, lastUpdate) values ({$ipHex}, '%s', unix_timestamp()) ON DUPLICATE KEY UPDATE host='%s', lastUpdate=unix_timestamp()", $host, $host);
 		}
 		if ($host == 'NONE') {
 			$_memoryCache[$IP] = '';
@@ -1545,26 +2188,35 @@ class wfUtils {
 		if(class_exists('wfScan')){ wfScan::$errorHandlingOn = true; }
 	}
 	//Note this function may report files that are too big which actually are not too big but are unseekable and throw an error on fseek(). But that's intentional
-	public static function fileTooBig($file){ //Deals with files > 2 gigs on 32 bit systems which are reported with the wrong size due to integer overflow
+	public static function fileTooBig($file, &$size = false, &$handle = false){ //Deals with files > 2 gigs on 32 bit systems which are reported with the wrong size due to integer overflow
 		if (!@is_file($file) || !@is_readable($file)) { return false; } //Only apply to readable files
 		wfUtils::errorsOff();
-		$fh = @fopen($file, 'r');
+		$fh = @fopen($file, 'rb');
 		wfUtils::errorsOn();
 		if(! $fh){ return false; }
-		$offset = WORDFENCE_MAX_FILE_SIZE_TO_PROCESS + 1;
-		$tooBig = false;
 		try {
-			if(@fseek($fh, $offset, SEEK_SET) === 0){
-				if(strlen(fread($fh, 1)) === 1){
-					$tooBig = true;
-				}
+			if(@fseek($fh, WORDFENCE_MAX_FILE_SIZE_OFFSET, SEEK_SET) === 0 && !empty(fread($fh, 1))){
+				return true;
 			} //Otherwise we couldn't seek there so it must be smaller
-			fclose($fh);
-			return $tooBig;
-		} catch(Exception $e){ return true; } //If we get an error don't scan this file, report it's too big.
+			if ($size !== false && @fseek($fh, 0, SEEK_END) === 0) {
+				$size = @ftell($fh);
+				if ($size === false)
+					$size = 0; // Assume 0 if unable to determine file size
+			}
+			return false;
+		} catch(Exception $e){
+			return true; //If we get an error don't scan this file, report it's too big.
+		} finally {
+			if ($handle === false) {
+				fclose($fh);
+			}
+			else {
+				$handle = $fh;
+			}
+		}
 	}
 	public static function fileOver2Gigs($file){ //Surround calls to this func with try/catch because fseek may throw error.
-		$fh = @fopen($file, 'r');
+		$fh = @fopen($file, 'rb');
 		if(! $fh){ return false; }
 		$offset = 2147483647;
 		$tooBig = false;
@@ -1595,57 +2247,26 @@ class wfUtils {
 		$URL = preg_replace('/\?.*$/', '', $URL); //strip off query string
 		return $URL;
 	}
-	public static function IP2Country($IP){
-		if (version_compare(phpversion(), '5.4.0', '<')) {
-			return '';
-		}
-		
-		if (!class_exists('wfGeoIP2')) {
-			wfUtils::error_clear_last();
-			require_once(dirname(__FILE__) . '/../models/common/wfGeoIP2.php');
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:');
-		}
-		
-		try {
-			wfUtils::error_clear_last();
-			$geoip = @wfGeoIP2::shared();
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:');
-			wfUtils::error_clear_last();
-			$code = @$geoip->countryCode($IP);
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:');
-			return is_string($code) ? $code : '';
-		}
-		catch (Exception $e) {
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:', $e->getMessage());
-		}
-		
-		return '';
+	public static function requireIpLocator() {
+		/**
+		 * This is also used in the WAF so in certain site setups (i.e. nested sites in subdirectories)
+		 * it's possible for this to already have been loaded from a different installation of the
+		 * plugin and hence require_once doesn't help as it's a different file path. There is no guarantee
+		 * that the two plugin installations are the same version, so should the wfIpLocator class or any
+		 * of its dependencies change in a manner that is not backwards compatible, this may need to be
+		 * handled differently.
+		 */
+		if (!class_exists('wfIpLocator'))
+			require_once(__DIR__ . '/wfIpLocator.php');
+	}
+	public static function IP2Country($ip){
+		self::requireIpLocator();
+		return wfIpLocator::getInstance()->getCountryCode($ip);
 	}
 	public static function geoIPVersion() {
-		if (version_compare(phpversion(), '5.4.0', '<')) {
-			return 0;
-		}
-		
-		if (!class_exists('wfGeoIP2')) {
-			wfUtils::error_clear_last();
-			require_once(dirname(__FILE__) . '/../models/common/wfGeoIP2.php');
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:');
-		}
-		
-		try {
-			wfUtils::error_clear_last();
-			$geoip = @wfGeoIP2::shared();
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:');
-			wfUtils::error_clear_last();
-			$version = @$geoip->version();
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:');
-			return $version;
-		}
-		catch (Exception $e) {
-			wfUtils::check_and_log_last_error('geoip', 'GeoIP Error:', $e->getMessage());
-		}
-		
-		return 0;
+		self::requireIpLocator();
+		$version = wfIpLocator::getInstance()->getDatabaseVersion();
+		return $version === null ? 0 : $version;
 	}
 	public static function siteURLRelative(){
 		if(is_multisite()){
@@ -1664,13 +2285,67 @@ class wfUtils {
 		return date('D jS F \@ h:i:sA', time() + (3600 * get_option('gmt_offset')));
 	}
 	public static function funcEnabled($func){
-		if(! function_exists($func)){ return false; }
+		if (!function_exists($func)){ return false; }
+		if (!is_callable($func)) { return false; }
 		$disabled = explode(',', ini_get('disable_functions'));
-		foreach($disabled as $f){
-			if($func == $f){ return false; }
+		if (in_array($func, $disabled)) {
+			return false;
 		}
 		return true;
 	}
+	
+	/**
+	 * Parses a callable and returns its components or null if it's not a valid callable. This does not attempt to verify
+	 * that the callable can actually be executed (e.g., the function may not exist), just that its structure is correct.
+	 * 
+	 * The array returned will have keys corresponding to the `wfUtils::CALLABLE_` constants.
+	 * 
+	 * @param callable $callable
+	 * @return array|null
+	 */
+	public static function parseCallable($callable) {
+		try {
+			if (!@is_callable($callable, true, $parsed)) {
+				return null;
+			}
+		}
+		catch (Throwable $t) {
+			return null;
+		}
+		
+		$className = null;
+		$functionName = null;
+		$isClosure = false;
+		$isInstance = false;
+		$isInvokable = false;
+		if (substr_count($parsed, '::')) {
+			$components = explode('::', $parsed);
+			$isClosure = $components[0] == 'Closure';
+			if (!$isClosure) {
+				$className = $components[0];
+				$functionName = $components[1];
+			}
+		}
+		else if (is_string($callable)) {
+			$functionName = $parsed;
+		}
+		
+		if (is_array($callable) && count($callable) == 2) {
+			$isInstance = is_object($callable[0]);
+		}
+		else if (!$isClosure && is_object($callable)) {
+			$isInvokable = true;
+		}
+		
+		return array(
+			self::CALLABLE_CLASS => $className,
+			self::CALLABLE_FUNCTION => $functionName,
+			self::CALLABLE_IS_CLOSURE => $isClosure,
+			self::CALLABLE_IS_INSTANCE => $isInstance,
+			self::CALLABLE_IS_INVOKABLE => $isInvokable,
+		);
+	}
+	
 	public static function iniSet($key, $val){
 		if(self::funcEnabled('ini_set')){
 			@ini_set($key, $val);
@@ -1678,7 +2353,7 @@ class wfUtils {
 	}
 	public static function doNotCache(){
 		header("Pragma: no-cache");
-		header("Cache-Control: no-cache, must-revalidate, private");
+		header("Cache-Control: no-cache, must-revalidate, private, max-age=0");
 		header("Expires: Sat, 26 Jul 1997 05:00:00 GMT"); //In the past
 		if(! defined('DONOTCACHEPAGE')){ define('DONOTCACHEPAGE', true); }
 		if(! defined('DONOTCACHEDB')){ define('DONOTCACHEDB', true); }
@@ -1807,11 +2482,14 @@ class wfUtils {
 		die();
 	}
 
-	public static function setcookie($name, $value, $expire, $path, $domain, $secure, $httpOnly){
-		if(version_compare(PHP_VERSION, '5.2.0') >= 0){
-			@setcookie($name, $value, $expire, $path, $domain, $secure, $httpOnly);
-		} else {
-			@setcookie($name, $value, $expire, $path);
+	public static function setcookie($name, $value = '', $expire = 0, $path = '', $domain = '', $secure = false, $httpOnly = false) {
+		if (empty($path)) { $path = COOKIEPATH; }
+		if (empty($domain)) { $domain = COOKIE_DOMAIN; }
+		if (version_compare(PHP_VERSION, '5.2.0') >= 0) {
+			setcookie($name, $value, $expire, $path, $domain, $secure, $httpOnly);
+		}
+		else {
+			setcookie($name, $value, $expire, $path);
 		}
 	}
 	public static function isNginx(){
@@ -1855,24 +2533,32 @@ class wfUtils {
 	 * @param string $host
 	 * @return array
 	 */
-	public static function resolveDomainName($host) {
-		// Fallback if this function is not available
+	public static function resolveDomainName($host, $ipVersion = null) {
 		if (!function_exists('dns_get_record')) {
-			return gethostbynamel($host);
-		}
-
-		$ips = array_merge((array) @dns_get_record($host, DNS_AAAA), (array) @dns_get_record($host, DNS_A));
-		$return = array();
-
-		foreach ($ips as $record) {
-			if ($record['type'] === 'A') {
-				$return[] = $record['ip'];
+			if ($ipVersion === 4 || $ipVersion === null) {
+				$ips = gethostbynamel($host);
+				if ($ips !== false)
+					return $ips;
 			}
-			if ($record['type'] === 'AAAA') {
-				$return[] = $record['ipv6'];
+			return array();
+		}
+		$recordTypes = array();
+		if ($ipVersion === 4 || $ipVersion === null)
+			$recordTypes[DNS_A] = 'ip';
+		if ($ipVersion === 6 || $ipVersion === null)
+			$recordTypes[DNS_AAAA] = 'ipv6';
+		$ips = array();
+		foreach ($recordTypes as $type => $key) {
+			$records = @dns_get_record($host, $type);
+			if ($records !== false && is_array($records)) {
+				foreach ($records as $record) {
+					if (array_key_exists($key, $record)) {
+						$ips[] = $record[$key];
+					}
+				}
 			}
 		}
-		return $return;
+		return $ips;
 	}
 
 	/**
@@ -2765,11 +3451,7 @@ class wfUtils {
 	}
 	
 	public static function array_strtolower($array) {
-		$result = array();
-		foreach ($array as $a) {
-			$result[] = strtolower($a);
-		}
-		return $result;
+		return array_map(function($v) { return self::strtolower($v); }, $array);
 	}
 	
 	public static function array_column($input = null, $columnKey = null, $indexKey = null) { //Polyfill from https://github.com/ramsey/array_column/blob/master/src/array_column.php
@@ -2839,6 +3521,20 @@ class wfUtils {
 		}
 		
 		return $resultArray;
+	}
+	
+	/**
+	 * Returns $string if it isn't empty, $ifEmpty if it is.
+	 * 
+	 * @param string $string
+	 * @param string $ifEmpty
+	 * @return string
+	 */
+	public static function string_empty($string, $ifEmpty) {
+		if (empty($string)) {
+			return $ifEmpty;
+		}
+		return $string;
 	}
 	
 	/**
@@ -3035,7 +3731,7 @@ class wfUtils {
 		
 		$json = self::base64url_decode($components[1]);
 		$payload = @json_decode($json, true);
-		if (isset($payload['_exp']) && $payload['_exp'] < time()) {
+		if (!is_array($payload) || (isset($payload['_exp']) && $payload['_exp'] < time())) {
 			return false;
 		}
 		return $payload;
@@ -3079,6 +3775,196 @@ class wfUtils {
 		));
 	}
 
+	/**
+	 * Determine the effective port given the output of parse_url
+	 * @param array $urlComponents
+	 * @return int the resolved port number
+	 */
+	private static function resolvePort($urlComponents) {
+		if (array_key_exists('port', $urlComponents) && !empty($urlComponents['port'])) {
+			return $urlComponents['port'];
+		}
+		if (array_key_exists('scheme', $urlComponents) && $urlComponents['scheme'] === 'https') {
+			return 443;
+		}
+		return 80;
+	}
+
+	/**
+	 * Check if two site URLs identify the same site
+	 * @param string $a first url
+	 * @param string $b second url
+	 * @param array $ignoredSubdomains An array of subdomains to ignore when matching (e.g., www)
+	 * @return bool true if the URLs match, false otherwise
+	 */
+	public static function compareSiteUrls($a, $b, $ignoredSubdomains = array()) {
+		$patterns = array_map(function($p) { return '/^' . preg_quote($p, '/') . '\\./i'; }, $ignoredSubdomains);
+		
+		$componentsA = parse_url($a);
+		if (isset($componentsA['host'])) { $componentsA['host'] = preg_replace($patterns, '', $componentsA['host']); }
+		$componentsB = parse_url($b);
+		if (isset($componentsB['host'])) { $componentsB['host'] = preg_replace($patterns, '', $componentsB['host']); }
+		foreach (array('host', 'port', 'path') as $component) {
+			$valueA = array_key_exists($component, $componentsA) ? $componentsA[$component] : null;
+			$valueB = array_key_exists($component, $componentsB) ? $componentsB[$component] : null;
+			if ($valueA !== $valueB) {
+				if ($component === 'port') {
+					$portA = self::resolvePort($componentsA);
+					$portB = self::resolvePort($componentsB);
+					if ($portA !== $portB)
+						return false;
+				}
+				else {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	public static function getHomePath() {
+		if (!function_exists('get_home_path')) {
+			include_once(ABSPATH . 'wp-admin/includes/file.php');
+		}
+		if (WF_IS_FLYWHEEL)
+			return trailingslashit($_SERVER['DOCUMENT_ROOT']);
+		return get_home_path();
+	}
+
+	public static function includeOnceIfPresent($path) {
+		if (file_exists($path) && is_readable($path)) {
+			@include_once($path);
+			return @include_once($path); //Calling `include_once` for an already included file will return true
+		}
+		return false;
+	}
+
+	public static function isCurlSupported() {
+		if (!function_exists('curl_init') || !function_exists('curl_exec')) {
+			return false;
+		}
+		
+		$is_ssl = isset($args['ssl']) && $args['ssl'];
+		
+		if ($is_ssl) {
+			$curl_version = curl_version();
+			// Check whether this cURL version support SSL requests.
+			if (!(CURL_VERSION_SSL & $curl_version['features'])) {
+				return false;
+			}
+		}
+		
+		return true;
+	}
+
+	private static function isValidJsonValue($value) {
+		return json_encode($value) !== false;
+	}
+
+	private static function filterInvalidJsonValues($data, &$modified, &$valid = null) {
+		if (is_array($data)) {
+			$modified = array();
+			$filtered = array();
+			$valid = true;
+			foreach ($data as $key => $value) {
+				$value = self::filterInvalidJsonValues($value, $itemModified, $itemValid);
+				if (($itemValid || $itemModified) && self::isValidJsonValue(array($key => $value))) {
+					$filtered[$key] = $value;
+					if ($itemModified)
+						$modified[$key] = $itemModified;
+				}
+				else {
+					$valid = false;
+				}
+			}
+			return $filtered;
+		}
+		else {
+			$modified = false;
+			$valid = self::isValidJsonValue($data);
+			if ($valid) {
+				return $data;
+			}
+			else if (is_string($data)) {
+				$modified = true;
+				return base64_encode($data);
+			}
+			else {
+				return null;
+			}
+		}
+	}
+
+	public static function jsonEncodeSafely($data) {
+		$encoded = json_encode($data);
+		if ($encoded === false) {
+			$data = self::filterInvalidJsonValues($data, $modified);
+			if ($modified)
+				$data['__modified__'] = $modified;
+			$encoded = json_encode($data);
+		}
+		return $encoded;
+	}
+	
+	/**
+	 * Convenience function to extract a matched pattern from a string. If $pattern has no matching groups, the entire
+	 * matched portion is returned. If it has at least one matching group, the first one is returned (others are 
+	 * ignored). If there is no match, false is returned.
+	 * 
+	 * @param string $pattern
+	 * @param string $subject
+	 * @param bool $expandToLine Whether or not to expand the captured value to include the entire line's contents
+	 * @return false|string
+	 */
+	public static function pregExtract($pattern, $subject, $expandToLine = false) {
+		if (preg_match($pattern, $subject, $matches, PREG_OFFSET_CAPTURE)) {
+			if (count($matches) > 1) {
+				$start = $matches[1][1];
+				$text = $matches[1][0];
+				$end = $start + strlen($text);
+			}
+			else {
+				$start = $matches[0][1];
+				$text = $matches[0][0];
+				$end = $start + strlen($text);
+			}
+			
+			if ($expandToLine) {
+				if (preg_match_all('/[\r\n]/', substr($subject, 0, $start), $matches, PREG_OFFSET_CAPTURE)) {
+					$start = $matches[0][count($matches[0]) - 1][1] + 1;
+				}
+				else {
+					$start = 0;
+				}
+				
+				if (preg_match('/[\r\n]/', $subject, $matches, PREG_OFFSET_CAPTURE, $end)) {
+					$end = $matches[0][1];
+				}
+				else {
+					$end = strlen($subject) - 0;
+				}
+				
+				$text = substr($subject, $start, $end - $start);
+			}
+			
+			return $text;
+		}
+		return false;
+	}
+	
+	/**
+	 * Returns whether or not MySQLi should be used directly when needed. Returns true if there's a valid DB handle,
+	 * our database test succeeded, our constant is not set to prevent it, and then either $wpdb indicates it's using
+	 * mysqli (older WordPress versions) or we're on PHP 7+ (only mysqli is ever used).
+	 * 
+	 * @return bool
+	 */
+	public static function useMySQLi() {
+		global $wpdb;
+		$dbh = $wpdb->dbh;
+		$useMySQLi = (is_object($dbh) && (PHP_MAJOR_VERSION >= 7 || $wpdb->use_mysqli) && wfConfig::get('allowMySQLi', true) && WORDFENCE_ALLOW_DIRECT_MYSQLI);
+		return $useMySQLi;
+	}
 }
 
 // GeoIP lib uses these as well
@@ -3111,21 +3997,29 @@ class wfWebServerInfo {
 	public static function createFromEnvironment() {
 		$serverInfo = new self;
 		$sapi = php_sapi_name();
-		if (stripos($_SERVER['SERVER_SOFTWARE'], 'apache') !== false) {
-			$serverInfo->setSoftware(self::APACHE);
-			$serverInfo->setSoftwareName('apache');
+		if (WF_IS_FLYWHEEL) {
+			$serverInfo->setSoftware(self::NGINX);
+			$serverInfo->setSoftwareName('Flywheel');
 		}
-		if (stripos($_SERVER['SERVER_SOFTWARE'], 'litespeed') !== false || $sapi == 'litespeed') {
-			$serverInfo->setSoftware(self::LITESPEED);
-			$serverInfo->setSoftwareName('litespeed');
+		else if (strpos($_SERVER['SERVER_SOFTWARE'], 'Microsoft-IIS') !== false || strpos($_SERVER['SERVER_SOFTWARE'], 'ExpressionDevServer') !== false) {
+			$serverInfo->setSoftware(self::IIS);
+			$serverInfo->setSoftwareName('iis');
 		}
-		if (strpos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
+		else if (strpos($_SERVER['SERVER_SOFTWARE'], 'nginx') !== false) {
 			$serverInfo->setSoftware(self::NGINX);
 			$serverInfo->setSoftwareName('nginx');
 		}
-		if (strpos($_SERVER['SERVER_SOFTWARE'], 'Microsoft-IIS') !== false || strpos($_SERVER['SERVER_SOFTWARE'], 'ExpressionDevServer') !== false) {
-			$serverInfo->setSoftware(self::IIS);
-			$serverInfo->setSoftwareName('iis');
+		else if (stripos($_SERVER['SERVER_SOFTWARE'], 'litespeed') !== false || $sapi == 'litespeed') {
+			$serverInfo->setSoftware(self::LITESPEED);
+			$serverInfo->setSoftwareName('litespeed');
+		}
+		else if (stripos($_SERVER['SERVER_SOFTWARE'], 'apache') !== false) {
+			$serverInfo->setSoftware(self::APACHE);
+			$serverInfo->setSoftwareName('apache');
+		}
+		else if (stripos($_SERVER['SERVER_SOFTWARE'], 'unit') !== false) {
+			$serverInfo->setSoftware(self::NGINX);
+			$serverInfo->setSoftwareName('unit');
 		}
 
 		$serverInfo->setHandler($sapi);
@@ -3143,7 +4037,7 @@ class wfWebServerInfo {
 	/**
 	 * @return bool
 	 */
-	public function isNGINX() {
+	public function isNginx() {
 		return $this->getSoftware() === self::NGINX;
 	}
 
@@ -3175,7 +4069,20 @@ class wfWebServerInfo {
 	public function isApacheSuPHP() {
 		return $this->isApache() && $this->isCGI() &&
 			function_exists('posix_getuid') &&
+			function_exists('getmyuid') &&
 			getmyuid() === posix_getuid();
+	}
+
+	private function isUnit() {
+		return $this->softwareName == "unit";
+	}
+
+	public function isNginxStandard() {
+		return $this->isNginx() && !$this->isUnit();
+	}
+
+	public function isNginxUnit() {
+		return $this->isNginx() && $this->isUnit();
 	}
 
 	/**

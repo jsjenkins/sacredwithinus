@@ -1,19 +1,24 @@
 <?php
+
+use Imagify\Imagifybeat\Actions;
+use Imagify\Imagifybeat\Core;
+use Imagify\Stats\OptimizedMediaWithoutNextGen;
+
 defined( 'ABSPATH' ) || die( 'Cheatin’ uh?' );
 
 /**
  * Get all translations we can use with wp_localize_script().
  *
- * @since  1.5
- * @author Jonathan Buttigieg
+ * @since 1.5
  *
- * @param  string $context       The translation context.
- * @return array  $translations  The translations.
+ * @param string $context The translation context.
+ *
+ * @return array $translations The translations.
  */
 function get_imagify_localize_script_translations( $context ) {
 	global $post_id;
 
-	$imagifybeat_actions = \Imagify\Imagifybeat\Actions::get_instance();
+	$imagifybeat_actions = Actions::get_instance();
 
 	switch ( $context ) {
 		case 'admin-bar':
@@ -40,7 +45,7 @@ function get_imagify_localize_script_translations( $context ) {
 					'saveApiKeyTitle'             => __( 'Connect to Imagify!', 'imagify' ),
 					'saveApiKeyText'              => __( 'Paste your API key below:', 'imagify' ),
 					'saveApiKeyConfirmButtonText' => __( 'Connect me', 'imagify' ),
-					'ApiKeyErrorEmpty'            => __( 'You need to specify your api key!', 'imagify' ),
+					'ApiKeyErrorEmpty'            => __( 'You need to specify your API key!', 'imagify' ),
 					'ApiKeyCheckSuccessTitle'     => __( 'Congratulations!', 'imagify' ),
 					'ApiKeyCheckSuccessText'      => __( 'Your API key is valid. You can now configure the Imagify settings to optimize your images.', 'imagify' ),
 				],
@@ -74,29 +79,32 @@ function get_imagify_localize_script_translations( $context ) {
 				],
 			];
 
-			if ( \Imagify\Stats\OptimizedMediaWithoutWebp::get_instance()->get_cached_stat() ) {
+			if ( OptimizedMediaWithoutNextGen::get_instance()->get_cached_stat() ) {
 				$contexts             = imagify_get_context_names();
 				$translations['bulk'] = [
-					'curlMissing'      => ! Imagify_Requirements::supports_curl(),
-					'editorMissing'    => ! Imagify_Requirements::supports_image_editor(),
-					'extHttpBlocked'   => Imagify_Requirements::is_imagify_blocked(),
-					'apiDown'          => ! Imagify_Requirements::is_api_up(),
-					'keyIsValid'       => Imagify_Requirements::is_api_key_valid(),
-					'isOverQuota'      => Imagify_Requirements::is_over_quota(),
-					'imagifybeatIDs'   => [
-						'queue'        => $imagifybeat_actions->get_imagifybeat_id( 'bulk_optimization_status' ),
+					'curlMissing'       => ! Imagify_Requirements::supports_curl(),
+					'editorMissing'     => ! Imagify_Requirements::supports_image_editor(),
+					'extHttpBlocked'    => Imagify_Requirements::is_imagify_blocked(),
+					'apiDown'           => ! Imagify_Requirements::is_api_up(),
+					'keyIsValid'        => Imagify_Requirements::is_api_key_valid(),
+					'isOverQuota'       => Imagify_Requirements::is_over_quota(),
+					'imagifybeatIDs'    => [
+						'progress'     => $imagifybeat_actions->get_imagifybeat_id( 'options_optimization_status' ),
 						'requirements' => $imagifybeat_actions->get_imagifybeat_id( 'requirements' ),
 					],
-					'ajaxActions'      => [
-						'getMediaIds' => 'imagify_get_media_ids',
-						'bulkProcess' => 'imagify_bulk_optimize',
+					'ajaxActions'       => [
+						'MissingNextGen' => 'imagify_missing_nextgen_generation',
 					],
-					'ajaxNonce'        => wp_create_nonce( 'imagify-bulk-optimize' ),
-					'contexts'         => $contexts,
-					'labels'           => [
+					'ajaxNonce'         => wp_create_nonce( 'imagify-bulk-optimize' ),
+					'contexts'          => $contexts,
+					'progress_next_gen' => [
+						'remaining' => OptimizedMediaWithoutNextGen::get_instance()->get_stat(),
+						'total'     => get_transient( 'imagify_missing_next_gen_total' ),
+					],
+					'labels'            => [
 						'curlMissing'                    => __( 'cURL is not available on the server.', 'imagify' ),
 						'editorMissing'                  => sprintf(
-							/* translators: %s is a "More info?" link. */
+							// translators: %s is a "More info?" link.
 							__( 'No php extensions are available to edit images on the server. ImageMagick or GD is required. %s', 'imagify' ),
 							'<a href="' . esc_url( imagify_get_external_url( 'documentation-imagick-gd' ) ) . '" target="_blank">' . __( 'More info?', 'imagify' ) . '</a>'
 						),
@@ -104,10 +112,9 @@ function get_imagify_localize_script_translations( $context ) {
 						'apiDown'                        => __( 'Sorry, our servers are temporarily unavailable. Please, try again in a couple of minutes.', 'imagify' ),
 						'invalidAPIKeyTitle'             => __( 'Your API key is not valid!', 'imagify' ),
 						'overQuotaTitle'                 => __( 'You have used all your credits!', 'imagify' ),
-						'processing'                     => __( 'Imagify is still processing. Are you sure you want to leave this page?', 'imagify' ),
 						'nothingToDoTitle'               => __( 'Hold on!', 'imagify' ),
-						'nothingToDoText'                => __( 'All your optimized images already have a WebP version. Congratulations!', 'imagify' ),
-						'nothingToDoNoBackupText'        => __( 'Because the selected images did not have a backup copy, Imagify was unable to create WebP versions.', 'imagify' ),
+						'nothingToDoText'                => __( 'All your optimized images already have a next-gen version. Congratulations!', 'imagify' ),
+						'nothingToDoNoBackupText'        => __( 'Because the selected images did not have a backup copy, Imagify was unable to create next-gen versions.', 'imagify' ),
 						'error'                          => __( 'Error', 'imagify' ),
 						'ajaxErrorText'                  => __( 'The operation failed.', 'imagify' ),
 						'getUnoptimizedImagesErrorTitle' => __( 'Oops, There is something wrong!', 'imagify' ),
@@ -131,13 +138,17 @@ function get_imagify_localize_script_translations( $context ) {
 
 		case 'pricing-modal':
 			$translations = [
-				'imagify_app_domain'  => IMAGIFY_APP_DOMAIN,
-				'labels' => [
-					'errorCouponAPI'   => __( 'Error with checking this coupon.', 'imagify' ),
-					/* translators: 1 is a percentage, 2 is a coupon code. */
-					'successCouponAPI' => sprintf( _x( '%1$s off with %2$s', 'coupon validated', 'imagify' ), '<span class="imagify-coupon-offer"></span>', '<strong class="imagify-coupon-word"></strong>' ),
-					'errorPriceAPI'    => __( 'Something went wrong with getting our updated offers. Please retry later.', 'imagify' ),
-					'defaultCouponLabel'    => __( 'If you have a <strong>coupon code</strong><br> use it here:', 'imagify' ),
+				'imagify_app_domain' => IMAGIFY_APP_DOMAIN,
+				'labels'             => [
+					'errorCouponAPI'     => __( 'Error with checking this coupon.', 'imagify' ),
+					'successCouponAPI'   => sprintf(
+						/* translators: 1 is a percentage, 2 is a coupon code. */
+						_x( '%1$s off with %2$s', 'coupon validated', 'imagify' ),
+						'<span class="imagify-coupon-offer"></span>',
+						'<strong class="imagify-coupon-word"></strong>'
+					),
+					'errorPriceAPI'      => __( 'Something went wrong with getting our updated offers. Please retry later.', 'imagify' ),
+					'defaultCouponLabel' => __( 'If you have a <strong>coupon code</strong><br> use it here:', 'imagify' ),
 					'errorCouponPlan'    => __( 'This coupon is not valid with this plan.', 'imagify' ),
 				],
 			];
@@ -166,7 +177,7 @@ function get_imagify_localize_script_translations( $context ) {
 
 					if ( $media->is_image() ) {
 						$dimensions = $media->get_dimensions();
-						$image = [
+						$image      = [
 							'src'    => $media->get_fullsize_url(),
 							'width'  => $dimensions['width'],
 							'height' => $dimensions['height'],
@@ -192,7 +203,7 @@ function get_imagify_localize_script_translations( $context ) {
 			];
 
 		case 'beat':
-			return \Imagify\Imagifybeat\Core::get_instance()->get_settings();
+			return Core::get_instance()->get_settings();
 
 		case 'media-modal':
 			return [
@@ -211,30 +222,30 @@ function get_imagify_localize_script_translations( $context ) {
 
 		case 'bulk':
 			$translations = [
-				'curlMissing'     => ! Imagify_Requirements::supports_curl(),
-				'editorMissing'   => ! Imagify_Requirements::supports_image_editor(),
-				'extHttpBlocked'  => Imagify_Requirements::is_imagify_blocked(),
-				'apiDown'         => Imagify_Requirements::is_imagify_blocked() || ! Imagify_Requirements::is_api_up(),
-				'keyIsValid'      => ! Imagify_Requirements::is_imagify_blocked() && Imagify_Requirements::is_api_up() && Imagify_Requirements::is_api_key_valid(),
-				'isOverQuota'     => ! Imagify_Requirements::is_imagify_blocked() && Imagify_Requirements::is_api_up() && Imagify_Requirements::is_api_key_valid() && Imagify_Requirements::is_over_quota(),
-				'imagifybeatIDs'   => [
+				'curlMissing'    => ! Imagify_Requirements::supports_curl(),
+				'editorMissing'  => ! Imagify_Requirements::supports_image_editor(),
+				'extHttpBlocked' => Imagify_Requirements::is_imagify_blocked(),
+				'apiDown'        => Imagify_Requirements::is_imagify_blocked() || ! Imagify_Requirements::is_api_up(),
+				'keyIsValid'     => ! Imagify_Requirements::is_imagify_blocked() && Imagify_Requirements::is_api_up() && Imagify_Requirements::is_api_key_valid(),
+				'isOverQuota'    => ! Imagify_Requirements::is_imagify_blocked() && Imagify_Requirements::is_api_up() && Imagify_Requirements::is_api_key_valid() && Imagify_Requirements::is_over_quota(),
+				'imagifybeatIDs' => [
 					'stats'        => $imagifybeat_actions->get_imagifybeat_id( 'bulk_optimization_stats' ),
 					'queue'        => $imagifybeat_actions->get_imagifybeat_id( 'bulk_optimization_status' ),
 					'requirements' => $imagifybeat_actions->get_imagifybeat_id( 'requirements' ),
 				],
-				'waitImageUrl'    => IMAGIFY_ASSETS_IMG_URL . 'popin-loader.svg',
-				'ajaxActions'     => [
-					'getMediaIds'   => 'imagify_get_media_ids',
+				'waitImageUrl'   => IMAGIFY_ASSETS_IMG_URL . 'popin-loader.svg',
+				'ajaxActions'    => [
 					'bulkProcess'   => 'imagify_bulk_optimize',
 					'getFolderData' => 'imagify_get_folder_type_data',
 					'bulkInfoSeen'  => 'imagify_bulk_info_seen',
 				],
-				'ajaxNonce'       => wp_create_nonce( 'imagify-bulk-optimize' ),
-				'bufferSizes'     => [
+				'ajaxNonce'      => wp_create_nonce( 'imagify-bulk-optimize' ),
+				'bufferSizes'    => [
 					'wp'             => 4,
 					'custom-folders' => 4,
 				],
-				'labels'          => [
+				'optimizing'     => get_transient( 'imagify_custom-folders_optimize_running' ) || get_transient( 'imagify_wp_optimize_running' ),
+				'labels'         => [
 					'overviewChartLabels'            => [
 						'unoptimized' => __( 'Unoptimized', 'imagify' ),
 						'optimized'   => __( 'Optimized', 'imagify' ),
@@ -250,13 +261,12 @@ function get_imagify_localize_script_translations( $context ) {
 					'apiDown'                        => __( 'Sorry, our servers are temporarily unavailable. Please, try again in a couple of minutes.', 'imagify' ),
 					'invalidAPIKeyTitle'             => __( 'Your API key is not valid!', 'imagify' ),
 					'overQuotaTitle'                 => __( 'You have used all your credits!', 'imagify' ),
-					'processing'                     => __( 'Imagify is still processing. Are you sure you want to leave this page?', 'imagify' ),
 					'waitTitle'                      => __( 'Please wait...', 'imagify' ),
 					'waitText'                       => __( 'We are trying to get your unoptimized media files, it may take time depending on the number of files.', 'imagify' ),
 					'nothingToDoTitle'               => __( 'Hold on!', 'imagify' ),
 					'nothingToDoText'                => [
 						'optimize'      => __( 'All your media files have been optimized by Imagify. Congratulations!', 'imagify' ),
-						'generate_webp' => __( 'All your optimized images already have a WebP version. Congratulations!', 'imagify' ),
+						'generate_webp' => __( 'All your optimized images already have a next-gen version. Congratulations!', 'imagify' ),
 					],
 					'optimizing'                     => __( 'Optimizing', 'imagify' ),
 					'error'                          => __( 'Error', 'imagify' ),
@@ -268,9 +278,6 @@ function get_imagify_localize_script_translations( $context ) {
 					'notice'                         => _x( 'Notice', 'noun', 'imagify' ),
 					/* translators: %s is a number. Don't use %d. */
 					'nbrErrors'                      => __( '%s error(s)', 'imagify' ),
-					/* translators: 1 and 2 are file sizes. Don't use HTML entities here (like &nbsp;). */
-					'textToShare'                    => __( 'Discover @imagify, the new compression tool to optimize your images for free. I saved %1$s out of %2$s!', 'imagify' ),
-					'twitterShareURL'                => imagify_get_external_url( 'share-twitter' ),
 					'getUnoptimizedImagesErrorTitle' => __( 'Oops, There is something wrong!', 'imagify' ),
 					'getUnoptimizedImagesErrorText'  => __( 'An unknown error occurred when we tried to get all your unoptimized media files. Try again and if the issue still persists, please contact us!', 'imagify' ),
 					'waitingOtimizationsText'        => __( 'Waiting other optimizations to finish.', 'imagify' ),
@@ -326,5 +333,5 @@ function get_imagify_localize_script_translations( $context ) {
 
 		default:
 			return [];
-	} // End switch().
+	}
 }

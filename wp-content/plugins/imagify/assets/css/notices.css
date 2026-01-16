@@ -21,6 +21,10 @@
 	text-decoration: none;
 }
 
+.imagify-notice-dismiss.notice-dismiss::before {
+	color: #fff;
+}
+
 /* Notices in Imagify related pages */
 .media_page_imagify-bulk-optimization .notice,
 body[class*="_imagify-ngg-bulk-optimization"] .notice,
@@ -363,4 +367,14 @@ body[class*="_imagify-ngg-bulk-optimization"] .notice,
 	.imagify-notice-quota-btn-container .imagify-button{
 		display: inline-block;
 	}
+}
+
+.imagify-notice-bulk-complete {
+	display: flex;
+	align-items: center;
+	padding: 12px 0;
+}
+
+.imagify-notice-bulk-complete-logo {
+	padding-right: 12px;
 }
