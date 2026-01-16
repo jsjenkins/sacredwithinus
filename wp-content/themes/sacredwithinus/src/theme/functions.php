@@ -35,10 +35,12 @@ if (function_exists('add_theme_support'))
 
     // Enable HTML5 support
     add_theme_support( 'html5', array( 'comment-list', 'comment-form', 'search-form', 'gallery', 'caption', 'style', 'script' ) );
-
-    // Localisation Support
-    load_theme_textdomain('html5blank', get_template_directory() . '/languages');
 }
+
+// Localisation Support
+add_action('init', function() {
+    load_theme_textdomain('html5blank', get_template_directory() . '/languages');
+});
 
 /*------------------------------------*\
     Functions
@@ -320,6 +322,15 @@ function get_image_directory()
 
     return $image_directory;
 }
+
+// Remove ACF unsafe html notice
+add_filter( 'acf/admin/prevent_escaped_html_notice', '__return_true' );
+
+// Allow unsafe html in ACF WYSIWYG fields
+add_filter( 'acf/the_field/allow_unsafe_html', function() { return true; }, 10, 2);
+
+// Remove auto sizes from images
+add_filter('wp_img_tag_add_auto_sizes', '__return_false');
 
 /*------------------------------------*\
     Menus
